@@ -111,6 +111,16 @@ void ArchipelagoMode::unpause() {
     GameModeBase::unpause();
 }
 
+PlayerActorHakoniwa* FreezeTagMode::getPlayerActorHakoniwa() {
+    PlayerActorBase* playerBase = (PlayerActorBase*)rs::getPlayerActor(mCurScene);
+    bool isYukimaru = !playerBase->getPlayerInfo();
+
+    if (isYukimaru)
+        return nullptr;
+
+    return (PlayerActorHakoniwa*)playerBase;
+}
+
 void ArchipelagoMode::receiveDeath(Deathlink* packet) {
     mApDeath = true;
     mDying = true;
