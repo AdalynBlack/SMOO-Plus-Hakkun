@@ -21,8 +21,7 @@ ArchipelagoConfigMenu::ArchipelagoConfigMenu() : GameModeConfigMenu() {
 }
 
 const sead::WFixedSafeString<0x200>* ArchipelagoConfigMenu::getStringData() {
-    mItems[0].copy(u"Set Score");
-    mItems[1].copy(u"Config Host Controls");
+    mItems[0].copy(u"Client IP");
 
     return mItems.mBuffer;
 }
