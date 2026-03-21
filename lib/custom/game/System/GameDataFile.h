@@ -892,7 +892,7 @@ private:
     bool mIsStageHakoniwa = true;
     s32 mGotCheckpointNum = 0;
     sead::FixedSafeString<128> _908;
-    FixedHeapArray<HintInfo, 1024> mHintList;
+    FixedHeapArray<HintInfo, 1024> mHintList;  // 0x9A0
     sead::PtrArray<WorldHintList> mHintTable;
     sead::PtrArray<WorldHintList> mHintTableByIdx;
     sead::PtrArray<WorldCoinCollectList> mCoinCollectTable;

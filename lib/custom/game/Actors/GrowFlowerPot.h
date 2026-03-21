@@ -1,0 +1,17 @@
+#pragma once
+
+#include "game/Util/ActorDimensionKeeper.h"
+#include "game/Util/IUseDimension.h"
+
+#include "Library/LiveActor/LiveActor.h"
+#include "types.h"
+
+class GrowFlowerPot : public al::LiveActor, public IUseDimension {
+public:
+    void* qword110;
+    al::PlacementId* mPlacementId;
+};
+
+namespace rs {
+void setGrowFlowerTime(const al::LiveActor*, const al::PlacementId*, u64);
+}
