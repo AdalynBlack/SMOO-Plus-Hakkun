@@ -2,12 +2,12 @@
 
 #include "al/Library/Factory/Factory.h"
 
+#include "server/archipelago/ArchipelagoConfigMenu.hpp"
 #include "server/freeze/FreezeTagConfigMenu.hpp"
 #include "server/gamemode/GameModeConfigMenu.hpp"
 #include "server/hns/HideAndSeekConfigMenu.hpp"
 #include "server/shine-thief/ShineThiefConfigMenu.hpp"
 #include "server/snh/SardineConfigMenu.hpp"
-#include "server/archipelago/ArchipelagoConfigMenu.hpp"
 
 typedef GameModeConfigMenu* (*createMenu)(const char* name);
 
@@ -17,10 +17,8 @@ GameModeConfigMenu* createGameModeConfigMenu(const char* name) {
 };
 
 __attribute((used)) constexpr al::NameToCreator<createMenu> menuTable[] = {
-    {"HideAndSeek", &createGameModeConfigMenu<HideAndSeekConfigMenu>},
-    {"Sardine", &createGameModeConfigMenu<SardineConfigMenu>},
-    {"FreezeTag", &createGameModeConfigMenu<FreezeTagConfigMenu>},
-    {"ShineThief", &createGameModeConfigMenu<ShineThiefConfigMenu>},
+    {"HideAndSeek", &createGameModeConfigMenu<HideAndSeekConfigMenu>}, {"Sardine", &createGameModeConfigMenu<SardineConfigMenu>},
+    {"FreezeTag", &createGameModeConfigMenu<FreezeTagConfigMenu>},     {"ShineThief", &createGameModeConfigMenu<ShineThiefConfigMenu>},
     {"Archipelago", &createGameModeConfigMenu<ArchipelagoConfigMenu>},
 };
 

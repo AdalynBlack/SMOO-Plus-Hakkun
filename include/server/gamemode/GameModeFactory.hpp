@@ -1,13 +1,12 @@
 #pragma once
 
 #include "Library/Factory/Factory.h"
+#include "server/archipelago/ArchipelagoMode.hpp"
 #include "server/freeze/FreezeTagMode.hpp"
 #include "server/gamemode/GameModeBase.hpp"
 #include "server/hns/HideAndSeekMode.hpp"
 #include "server/shine-thief/ShineThiefMode.hpp"
 #include "server/snh/SardineMode.hpp"
-#include "server/archipelago/ArchipelagoMode.hpp"
-
 
 typedef GameModeBase* (*createMode)(const char* name);
 
@@ -16,11 +15,9 @@ GameModeBase* createGameMode(const char* name) {
     return new T(name);
 };
 
-__attribute((used)) constexpr al::NameToCreator<createMode> modeTable[] = {{"HideAndSeek", &createGameMode<HideAndSeekMode>},
-                                                                           {"Sardines", &createGameMode<SardineMode>},
-                                                                           {"FreezeTag", &createGameMode<FreezeTagMode>},
-                                                                           {"ShineThief", &createGameMode<ShineThiefMode>},
-                                                                           {"Archipelago", &createGameMode<ArchipelagoMode>},
+__attribute((used)) constexpr al::NameToCreator<createMode> modeTable[] = {
+    {"HideAndSeek", &createGameMode<HideAndSeekMode>}, {"Sardines", &createGameMode<SardineMode>},        {"FreezeTag", &createGameMode<FreezeTagMode>},
+    {"ShineThief", &createGameMode<ShineThiefMode>},   {"Archipelago", &createGameMode<ArchipelagoMode>},
 };
 
 constexpr const char* modeNames[] = {"Hide and Seek", "Sardines", "Freeze Tag", "Shine Thief", "Archipelago Multiworld"};
