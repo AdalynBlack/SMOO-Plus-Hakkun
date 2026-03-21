@@ -64,6 +64,7 @@
 #include "gfx/seadColor.h"
 #include "helpers.hpp"
 #include "hooks.hpp"
+#include "hooksArchipelago.hpp"
 #include "hooksFreezeTag.hpp"
 #include "imgui.h"
 #include "Imgui.hpp"
@@ -77,6 +78,7 @@
 #include "Scene/Twists/Darkness/Darkness.hpp"
 #include "Scene/Twists/Timewarp/Timewarp.hpp"
 #include "Scene/Twists/TwistsConfig.hpp"
+#include "server/archipelago/ArchipelagoMode.hpp"
 #include "server/Client.hpp"
 #include "server/DeltaTime.hpp"
 #include "server/freeze/FreezeTagMode.hpp"
@@ -150,15 +152,24 @@ HkTrampoline<PlayerCostumeInfo*, al::LiveActor*, al::ActorInitInfo&, char*, char
     });
 
 HkTrampoline<void, GameDataHolderWriter, ShineInfo*> sendShinePacketHook = hk::hook::trampoline([](GameDataHolderWriter writer, ShineInfo* info) -> void {
-    if (!GameDataFunction::isGotShine(writer, info)) {
+    if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        if (!GameDataFunction::isGotShine(writer, info)) {
+            for (int x = 0; x < 0x400; x++) {
+                GameDataFile::HintInfo* curInfo = &writer->getGameDataFile()->getHintList()[x];
+                if (info->mStageName == curInfo->stageName && info->mObjId == curInfo->objId) {
+                    Client::sendShineCollectPacket(curInfo->uniqueId);
+                }
+            }
+        }
+        sendShinePacketHook.orig(writer, info);
+    } else {
         for (int x = 0; x < 0x400; x++) {
             GameDataFile::HintInfo* curInfo = &writer->getGameDataFile()->getHintList()[x];
             if (info->mStageName == curInfo->stageName && info->mObjId == curInfo->objId) {
-                Client::sendShineCollectPacket(curInfo->uniqueId);
+                GameModeManager::instance()->getMode<ArchipelagoMode>()->sendCheckPacket(curInfo->uniqueId, CheckType::Moon);
             }
         }
     }
-    sendShinePacketHook.orig(writer, info);
 });
 
 HkTrampoline<void, GameDataFile*, const char*> sendShinePacketHook2 = hk::hook::trampoline([](GameDataFile* file, const char* name) -> void {
@@ -937,4 +948,59 @@ extern "C" void hkMain() {
 
     hk::gfx::ImGuiBackendNvn::instance()->installHooks(false);
     hk::gfx::DebugRenderer::instance()->installHooks();
+
+    // Archipelago
+    hk::hook::writeBranchLinkAtMainOffset(0x50FED4, onUnlockLost);      // Beat Bowser in Cloud Check
+    hk::hook::writeBranchLinkAtMainOffset(0x4C54A4, onCreditsStart);    // Beat the Game Check
+    hk::hook::writeBranchLinkAtMainOffset(0x54C3A0, isBuyItems);        // Shop bought items
+    hk::hook::writeBranchLinkAtMainOffset(0x4C54A4, skipHackCutscene);  // Skip frog cutscene
+    hk::hook::writeBranchAtMainOffset(0x56CC70, canEndHack);            // Fix uncapture crash
+
+    hk::hook::writeBranchLinkAtMainOffset(0x4496AC, onAddHack);              // Capturesanity checks
+    hk::hook::writeBranchLinkAtMainOffset(0x2089C4, getShopItemMessage);     // Shop Text Replacement
+    hk::hook::writeBranchLinkAtMainOffset(0x208A44, getShopItemMessage);     // Shop Text Replacement
+    hk::hook::a64::assemble<"MOV W8, W28">().installAtMainOffset(0x534C58);  // Lock painting order
+    hk::hook::a64::assemble<"MOV W8, W26">().installAtMainOffset(0x534C70);  // as if lake and snow
+    hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534C80);  // are always branch
+    hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534C9C);  // selections
+    hk::hook::a64::assemble<"MOV X0, #17">().installAtMainOffset(0x52B154);  // Always unlock whole moon list
+
+    // Don't auto equip cutscene awarded outfits
+    // Transition to Branch Link to prevent interfering with base game when AP disabled
+    hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x4DD16C);
+    hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x4DD0AC);
+    hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x4DD0E8);
+    hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x310FE4);
+    hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x311440);
+    hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x311464);
+
+    // Moon Data Replacement
+    // Text Label
+    hk::hook::writeBranchLinkAtMainOffset(0x4DC504, isReplaceShineLabel);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DE63C, isReplaceShineLabel);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DD680, isReplaceShineLabel);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DC52C, setShineLabel);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DE664, setShineLabel);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DD6A8, setShineLabel);
+
+    // Color
+    hk::hook::writeBranchLinkAtMainOffset(0x1CDCE4, setShineColor);
+    hk::hook::writeBranchLinkAtMainOffset(0x1CDDCC, setShineColor);
+    hk::hook::a64::assemble<"MOV X0, X19">().installAtMainOffset(0x1CDD2C);
+    hk::hook::a64::assemble<"MOV X0, X19">().installAtMainOffset(0x1CDE14);
+    hk::hook::writeBranchLinkAtMainOffset(0x1CDD3C, setShineModelColor);
+    hk::hook::writeBranchLinkAtMainOffset(0x1CDE24, setShineModelColor);
+
+    hk::hook::writeBranchLinkAtMainOffset(0x1D2F08, onGrandShineStageChange);  // Fixes multi moon soft lock
+    hk::hook::writeBranchLinkAtMainOffset(0x52F71C, changeNextStage);          // Scenario Tracking
+    hk::hook::writeBranchLinkAtMainOffset(0x51DA40, changeNextStage);          // Scenario updating via Odyssey
+
+    // Grab Shine replace
+    isGrabShineByShineInfoHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessorPK9ShineInfo">();
+    isGrabShineByHintInfoIdxHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessori">();
+    isGrabShineByWorldIdHintIdxHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessorii">();
+
+    getUnlockShineNumHook.installAtSym<"_ZNK14GameDataHolder18findUnlockShineNumEPbi">();
+    //.installAtSym<"">();
+    //.installAtSym<"_ZNK12GameDataFile30findUnlockShineNumCurrentWorldEPb">();
 }
