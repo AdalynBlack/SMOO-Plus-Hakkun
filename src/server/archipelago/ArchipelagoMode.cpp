@@ -12,8 +12,8 @@
 #include "al/Library/Nerve/NerveUtil.h"
 #include "al/Library/Scene/SceneObjUtil.h"
 
-#include "game/Info/ShineInfo.h"
 #include "game/Item/CoinCollectHolder.h"
+#include "game/Item/ShineInfo.h"
 #include "game/Player/HackCap.h"
 #include "game/Player/PlayerActorHakoniwa.h"
 #include "game/Player/PlayerAnimator.h"

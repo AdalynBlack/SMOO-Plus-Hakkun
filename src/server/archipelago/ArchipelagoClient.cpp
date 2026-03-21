@@ -10,7 +10,7 @@
 #include "al/Library/LiveActor/ActorPoseUtil.h"
 #include "al/Library/Play/Layout/SimpleLayoutAppearWaitEnd.h"
 
-#include "game/Info/ShineInfo.h"
+#include "game/Item/ShineInfo.h"
 #include "game/Player/HackCap.h"
 #include "game/Player/PlayerAnimator.h"
 #include "game/Player/PlayerHackKeeper.h"
