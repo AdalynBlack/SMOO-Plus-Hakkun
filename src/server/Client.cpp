@@ -123,8 +123,7 @@ void Client::init(al::LayoutInitInfo const& initInfo, GameDataHolderAccessor hol
     mUIMessage->setTxtMessage(u"Connecting to Server.");
     mUIMessage->setTxtMessageConfirm(u"Failed to Connect!");
 
-    al::setPaneString(mConnectStatus, "TxtSave", u"Connecting to Server.", 0);
-    al::setPaneString(mConnectStatus, "TxtSaveSh", u"Connecting to Server.", 0);
+    setConnectStatusMsg(u"Connecting to Server.");
 
     mHolder = holder;
 
@@ -182,9 +181,11 @@ void Client::restartConnection() {
     sInstance->mSocket->setLogState(SOCKET_LOG_DISCONNECTED);
     sInstance->mSocket->startEndThread();
 
-    sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mServerIP.cstr(), sInstance->mServerPort).IsSuccess();
-
-    nn::os::SleepThread(nn::TimeSpan::FromMilliSeconds(10));  // BAD
+    while (!sInstance->mIsConnectionActive) {
+        sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mServerIP.cstr(), sInstance->mServerPort).IsSuccess();
+        nn::os::YieldThread();
+        nn::os::SleepThread(nn::TimeSpan::FromMilliSeconds(250));  // BAD
+    }
 
     if (sInstance->lastGameInfPacket != sInstance->emptyGameInfPacket) {
         if (sInstance->lastGameInfPacket.mUserID != sInstance->mUserID) {
@@ -436,15 +437,15 @@ void Client::readFunc() {
     if (!startConnection()) {
         Logger::log("Failed to Connect to Server.\n");
 
-        nn::os::SleepThread(nn::TimeSpan::FromNanoSeconds(250000000));
+        nn::os::SleepThread(nn::TimeSpan::FromMilliSeconds(250));  // sleep active thread for 0.25 seconds
 
         mConnectStatus->end();
 
         return;
     }
 
-    nn::os::SleepThread(nn::TimeSpan::FromNanoSeconds(500000000));
-
+    nn::os::SleepThread(nn::TimeSpan::FromMilliSeconds(500));  // sleep for 0.5 seconds to let connection layout fully show
+                                                               // (probably should find a better way to do this)
     mConnectStatus->end();
 
     while (mIsConnectionActive) {
@@ -557,6 +558,39 @@ void Client::readFunc() {
                 Logger::log("Server version: ", initPacket->ServerVersion);
                 break;
             }
+
+            // Archipelago Packets
+            case PacketType::CHECK:
+                receiveCheck((Check*)curPacket);
+                break;
+            case PacketType::SHINECHECKS:
+                updateSentShines((ShineChecks*)curPacket);
+                break;
+            // case PacketType::APCHATMESSAGE:
+            //     updateChatMessages((ArchipelagoChatMessage*)curPacket);
+            //     break;
+            case PacketType::SLOTDATA:
+                updateSlotData((SlotData*)curPacket);
+                break;
+            case PacketType::APINFO:
+                addApInfo((ApInfo*)curPacket);
+                break;
+            case PacketType::SHINEREPLACE:
+                updateShineReplace((ShineReplacePacket*)curPacket);
+                break;
+            case PacketType::SHINECOLOR:
+                updateShineColor((ShineColor*)curPacket);
+                break;
+            case PacketType::SHOPREPLACE:
+                updateShopReplace((ShopReplacePacket*)curPacket);
+                break;
+            case PacketType::UNLOCKWORLD:
+                updateWorlds((UnlockWorld*)curPacket);
+                break;
+            case PacketType::DEATHLINK:
+                receiveDeath((Deathlink*)curPacket);
+                break;
+
             default:
                 Logger::log("Discarding Unknown Packet Type.\n");
                 break;
@@ -1613,28 +1647,28 @@ void Client::updateShines() {
         }
 
         GameDataFile::HintInfo* shineInfo = CustomGameDataFunction::getHintInfoByUniqueID(accessor, shineID);
+        if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+            if (shineInfo) {
+                if (!GameDataFunction::isGotShine(accessor, shineInfo->stageName.cstr(), shineInfo->objId.cstr())) {
+                    Shine* stageShine = findStageShine(shineID);
 
-        if (shineInfo) {
-            if (!GameDataFunction::isGotShine(accessor, shineInfo->stageName.cstr(), shineInfo->objId.cstr())) {
-                Shine* stageShine = findStageShine(shineID);
+                    if (stageShine) {
+                        if (al::isDead(stageShine)) {
+                            stageShine->makeActorAlive();
+                        }
 
-                if (stageShine) {
-                    if (al::isDead(stageShine)) {
-                        stageShine->makeActorAlive();
+                        stageShine->getDirect();
+                        stageShine->onSwitchGet();
                     }
 
-                    stageShine->getDirect();
-                    stageShine->onSwitchGet();
+                    GameDataHolderAccessor(accessor)->getGameDataFile()->setGotShine(shineInfo);
                 }
-
-                GameDataHolderAccessor(accessor)->getGameDataFile()->setGotShine(shineInfo);
             }
         }
     }
 
     sInstance->resetCollectedShines();
-    sInstance->mCurStageScene->stageSceneLayout->startShineCountAnim(false);
-    sInstance->mCurStageScene->stageSceneLayout->updateCounterParts();
+    startShineCount();
 }
 
 /**
@@ -1946,6 +1980,17 @@ void Client::hideConnect() {
         return;
 
     sInstance->mUIMessage->tryEnd();
+}
+
+void Client::setConnectStatusMsg(const char16_t* msg) {
+    if (!sInstance) {
+        return;
+    }
+
+    if (sInstance->mConnectStatus) {
+        al::setPaneString(sInstance->mConnectStatus, "TxtSave", msg, 0);
+        al::setPaneString(sInstance->mConnectStatus, "TxtSaveSh", msg, 0);
+    }
 }
 
 /**

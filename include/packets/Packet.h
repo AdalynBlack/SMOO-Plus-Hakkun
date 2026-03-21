@@ -12,6 +12,11 @@
 #define MESSAGESIZE 0x4B
 #define VERSIONSIZE 0x20  // Change from 0x40 to 0x20 to match C# (32 bytes)
 
+// Archipelago constants
+#define APNAMESIZE 0x28
+#define ITEMNAMESIZE 0x80
+#define OBJECTIDSIZE 0x20
+
 #define MAXPACKSIZE 0x100
 
 enum PacketType : short {
@@ -35,14 +40,26 @@ enum PacketType : short {
     EXTRA,
     HEALTHCOINS,
     COINCOLLECTCOLL,
+    BUYITEM,
+    // APCHATMESSAGE, // Needs reevaluation
+    SLOTDATA,
+    UNLOCKWORLD,
+    CHECK,
+    DEATHLINK,
+    SHINECHECKS,
+    APINFO,
+    SHOPREPLACE,
+    SHINEREPLACE,
+    SHINECOLOR,
     End  // end of enum for bounds checking
 };
 
 constexpr static const char* packetNames[] = {"Unknown", "Client Initialization", "Player Info", "Player Cap Info", "Game Info", "Tag Info",
                                               //"Freeze Info",
                                               "Player Connect", "Player Disconnect", "Costume Info", "Moon Collection", "Capture Info", "Change Stage",
-                                              "Server Command", "Message", "UDP Initialization", "UDP Hole Punch", "Extra", "Health and Coins",
-                                              "Purple Coin Collection"};
+                                              "Server Command", "Message", "UDP Initialization", "UDP Hole Punch", "Extra", "Health and Coins", "Buy Shop Item",
+                                              " Archipelago Slot Data ", " Unlock World ", " Archipelago Check ", " Archipelago Deathlink ", "Shine Checks",
+                                              "Archipelago Info", "Archipelago Shop Text", "Archipelago Moon Text", "Archipelago Moon Color"};
 
 enum SenderType { SERVER, CLIENT };
 
@@ -65,6 +82,7 @@ struct PACKED Packet {
 // all packet types
 
 // IWYU pragma: begin_keep
+#include "packets/BuyItemPacket.h"
 #include "packets/CaptureInf.h"
 #include "packets/ChangeStagePacket.h"
 #include "packets/CoinCollectCollect.h"
@@ -83,3 +101,15 @@ struct PACKED Packet {
 #include "packets/ShineThiefInf.h"
 #include "packets/TagInf.h"
 // IWYU pragma: end_keep
+
+// Archipelago Packets
+#include "packets/archipelago/Check.h"
+#include "packets/archipelago/ShineColor.h"
+// #include "packets/archipelago/ArchipelagoChatMessage.h"
+#include "packets/archipelago/ApInfo.h"
+#include "packets/archipelago/Deathlink.h"
+#include "packets/archipelago/ShineChecks.h"
+#include "packets/archipelago/ShineReplacePacket.h"
+#include "packets/archipelago/ShopReplacePacket.h"
+#include "packets/archipelago/SlotData.h"
+#include "packets/archipelago/UnlockWorld.h"
