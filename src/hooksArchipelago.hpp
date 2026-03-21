@@ -1,5 +1,6 @@
 #pragma once
 
+#include "server/Client.hpp"
 #include "hk/hook/Replace.h"
 #include "hk/hook/Trampoline.h"
 
@@ -10,6 +11,7 @@
 #include "al/Library/Message/MessageHolder.h"
 #include "al/Library/Nerve/NerveUtil.h"
 #include "al/Library/Scene/SceneObjUtil.h"
+#include "al/Library/Scene/Scene.h"
 
 #include "game/Actors/GrowFlowerPot.h"
 #include "game/Demo/DemoStateHackFirst.h"
@@ -21,6 +23,7 @@
 #include "game/System/GameDataHolder.h"
 #include "game/System/GameDataHolderAccessor.h"
 #include "game/System/GameDataHolderWriter.h"
+#include "game/System/GameDataFunction.h"
 #include "game/Util/ItemUtil.h"
 #include "game/Util/StageLayoutFunction.h"
 
