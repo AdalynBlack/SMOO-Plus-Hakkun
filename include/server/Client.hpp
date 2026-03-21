@@ -28,9 +28,12 @@
 #include "game/Item/CoinCollect.h"
 #include "game/Item/CoinCollect2D.h"
 #include "game/Item/Shine.h"
+#include "game/Layout/ShopLayoutInfo.h"
 #include "game/Player/PlayerActorHakoniwa.h"
 #include "game/Scene/StageScene.h"
+#include "game/Sequence/ChangeStageInfo.h"
 #include "game/System/GameDataHolderAccessor.h"
+#include "game/System/GameDataHolderWriter.h"
 
 // ===== NINTENDO SDK INCLUDES =====
 #include "nn/account.h"
@@ -217,6 +220,9 @@ public:
     static void showConnect();
     static void showConnectError(const char16_t* msg);
     static void hideConnect();
+    static void setConnectStatusMsg(const char16_t* msg);
+    static void startShineCount();
+    static void startShineChipCount();
 
     // ===== PUBLIC MEMBERS (for debug purposes) =====
     SocketClient* mSocket;
@@ -239,6 +245,58 @@ public:
     // ===== Message System =====
     int getMsgCount() { return mMessageQueue.mMessageQueueInner._count; };
     static int getMaxMsgCount() { return sMaxMsgCount; };
+
+    // ===== Archipelago Setters / Getters =====
+    static const char* getApClientIP();
+    static void setApClientIP(const char* ip);
+
+    static void setScenario(int worldID, int scenario);
+    static bool setScenario(const char* worldName, int scenario);
+    static int getScenario(const char* worldName);
+    static int getScenario(int worldID);
+    static void sendCorrectScenario(const ChangeStageInfo* info);
+
+    static void addShine(int uid);
+    static bool hasShine(int uid);
+    static int getShineChecks(int index);
+    static void setShineChecks(int index, int checks);
+
+    static void addOutfit(const ShopItem::ItemInfo* info);
+    static bool hasOutfit(const ShopItem::ItemInfo* info);
+    static int getOutfitChecks(int index);
+    static void setOutfitChecks(int index, int checks);
+
+    static void addSticker(const ShopItem::ItemInfo* info);
+    static bool hasSticker(const ShopItem::ItemInfo* info);
+    static int getStickerChecks(int index);
+    static void setStickerChecks(int index, int checks);
+
+    static void addSouvenir(const ShopItem::ItemInfo* info);
+    static bool hasSouvenir(const ShopItem::ItemInfo* info);
+    static int getSouvenirChecks(int index);
+    static void setSouvenirChecks(int index, int checks);
+
+    static bool hasItem(const ShopItem::ItemInfo* info);
+    static void addItem(const ShopItem::ItemInfo* info);
+
+    static void addCapture(const char* capture);
+    static bool hasCapture(const char* capture);
+    static int getCaptureChecks(int index);
+    static void setCaptureChecks(int index, int checks);
+    static void addCaptureCheck(const char* capture);
+    static bool hasCaptureCheck(const char* capture);
+
+    static void setMessage(int num, const char* msg);
+
+    static const char* getShineReplacementText();
+    static int getShineColor(Shine* curShine);
+    static const char16_t* getShopReplacementText(const char* fileName, const char* key);
+
+    // ===== ARCHIPELAGO PACKET HANDLERS =====
+    static void sendCheckPacket(int locationId, int itemType);
+    static void sendCheckPacket(int itemType, const char* objId, const char* stageName);
+    static void sendDeathlinkPacket();
+    static void sendChangeStagePacket(GameDataHolderAccessor accessor);
 
 private:
     // ===== CORE FUNCTIONALITY =====
@@ -263,6 +321,18 @@ private:
     void updateMessages(MessagePacket* packet);
     void updateHealthCoins(HealthCoins* packet);
     void updateCoinCollects(CoinCollectCollect* packet);
+
+    // ===== ARCHIPELAGO PACKET HANDLERS =====
+    // void updateChatMessages(ArchipelagoChatMessage* packet);
+    void addApInfo(ApInfo* packet);
+    void updateSentShines(ShineChecks* packet);
+    void updateShineReplace(ShineReplacePacket* packet);
+    void updateShineColor(ShineColor* packet);
+    void updateShopReplace(ShopReplacePacket* packet);
+    void updateSlotData(SlotData* packet);
+    void updateWorlds(UnlockWorld* packet);
+    void receiveCheck(Check* packet);
+    void receiveDeath(Deathlink* packet);
 
     // ===== UTILITY METHODS =====
     PuppetInfo* findPuppetInfo(const nn::account::Uid& id, bool isFindAvailable);
@@ -289,6 +359,8 @@ private:
     sead::FixedSafeString<64> mServerVersion;
     bool mServerHidden = true;
     bool mIsDisableMusic = false;
+    // Separate IP for Archipelago Client
+    hostname mApClientIP;
 
     // ===== HEALTH AND COINS =====
     bool isKids = false;

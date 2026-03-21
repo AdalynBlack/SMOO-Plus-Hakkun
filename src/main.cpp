@@ -38,7 +38,7 @@
 
 #include "agl/common/aglDrawContext.h"
 
-#include "game/Info/ShineInfo.h"
+#include "game/Item/ShineInfo.h"
 #include "game/Player/HackCap.h"
 #include "game/Player/PlayerActorBase.h"
 #include "game/Player/PlayerActorHakoniwa.h"

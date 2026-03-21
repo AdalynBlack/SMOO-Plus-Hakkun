@@ -73,6 +73,8 @@ static HkTrampoline<void, GameConfigData*, al::ByamlWriter*> saveWriteHook = hk:
     const bool lowLatency = StageSceneStateModConfig::isLowLatencyEnabled();
     const bool music = !Client::isMusicDisabled();
 
+    const char* apClientIP = Client::getApClientIP();
+
     writer->pushHash("SMOOData");
     if (serverIP) {
         writer->addString("ServerIP", serverIP);
@@ -95,6 +97,13 @@ static HkTrampoline<void, GameConfigData*, al::ByamlWriter*> saveWriteHook = hk:
     writer->addBool("LowLatency", lowLatency);
     writer->addBool("Music", music);
     writer->pop();
+
+    writer->pushHash("ArchipelagoData");
+    if (serverIP) {
+        writer->addString("ApClientIP", apClientIP);
+    } else {
+        writer->addString("ApClientIP", "127.0.0.1");
+    }
 });
 
 static HkTrampoline<void, GameConfigData*, const al::ByamlIter&> saveReadHook =
@@ -111,6 +120,8 @@ static HkTrampoline<void, GameConfigData*, const al::ByamlIter&> saveReadHook =
         bool costumeDoorsUnlocked = true;
         bool lowLatency = false;
         bool music = true;
+
+        const char* apClientIP = "";
 
         al::ByamlIter iterIntern;
         al::tryGetByamlIterByKey(&iterIntern, iter, "SMOOData");
@@ -149,6 +160,12 @@ static HkTrampoline<void, GameConfigData*, const al::ByamlIter&> saveReadHook =
             if (Client::isMusicDisabled() != !music) {
                 Client::toggleMusicDisabled();
             }
+        }
+
+        al::tryGetByamlIterByKey(&iterIntern, iter, "ArchipelagoData");
+
+        if (al::tryGetByamlString(&apClientIP, iterIntern, "ApClientIP")) {
+            Client::setApClientIP(apClientIP);
         }
     });
 
