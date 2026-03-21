@@ -111,7 +111,7 @@ void ArchipelagoMode::unpause() {
     GameModeBase::unpause();
 }
 
-PlayerActorHakoniwa* FreezeTagMode::getPlayerActorHakoniwa() {
+PlayerActorHakoniwa* ArchipelagoMode::getPlayerActorHakoniwa() {
     PlayerActorBase* playerBase = (PlayerActorBase*)rs::getPlayerActor(mCurScene);
     bool isYukimaru = !playerBase->getPlayerInfo();
 
