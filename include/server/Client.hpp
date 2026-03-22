@@ -250,48 +250,6 @@ public:
     static const char* getApClientIP();
     static void setApClientIP(const char* ip);
 
-    static void setScenario(int worldID, int scenario);
-    static bool setScenario(const char* worldName, int scenario);
-    static int getScenario(const char* worldName);
-    static int getScenario(int worldID);
-    static void sendCorrectScenario(const ChangeStageInfo* info);
-
-    static void addShine(int uid);
-    static bool hasShine(int uid);
-    static int getShineChecks(int index);
-    static void setShineChecks(int index, int checks);
-
-    static void addOutfit(const ShopItem::ItemInfo* info);
-    static bool hasOutfit(const ShopItem::ItemInfo* info);
-    static int getOutfitChecks(int index);
-    static void setOutfitChecks(int index, int checks);
-
-    static void addSticker(const ShopItem::ItemInfo* info);
-    static bool hasSticker(const ShopItem::ItemInfo* info);
-    static int getStickerChecks(int index);
-    static void setStickerChecks(int index, int checks);
-
-    static void addSouvenir(const ShopItem::ItemInfo* info);
-    static bool hasSouvenir(const ShopItem::ItemInfo* info);
-    static int getSouvenirChecks(int index);
-    static void setSouvenirChecks(int index, int checks);
-
-    static bool hasItem(const ShopItem::ItemInfo* info);
-    static void addItem(const ShopItem::ItemInfo* info);
-
-    static void addCapture(const char* capture);
-    static bool hasCapture(const char* capture);
-    static int getCaptureChecks(int index);
-    static void setCaptureChecks(int index, int checks);
-    static void addCaptureCheck(const char* capture);
-    static bool hasCaptureCheck(const char* capture);
-
-    static void setMessage(int num, const char* msg);
-
-    static const char* getShineReplacementText();
-    static int getShineColor(Shine* curShine);
-    static const char16_t* getShopReplacementText(const char* fileName, const char* key);
-
     // ===== ARCHIPELAGO PACKET HANDLERS =====
     static void sendCheckPacket(int locationId, int itemType);
     static void sendCheckPacket(int itemType, const char* objId, const char* stageName);
@@ -325,11 +283,11 @@ private:
     // ===== ARCHIPELAGO PACKET HANDLERS =====
     // void updateChatMessages(ArchipelagoChatMessage* packet);
     void addApInfo(ApInfo* packet);
+    void updateSlotData(SlotData* packet);
     void updateSentShines(ShineChecks* packet);
     void updateShineReplace(ShineReplacePacket* packet);
     void updateShineColor(ShineColor* packet);
     void updateShopReplace(ShopReplacePacket* packet);
-    void updateSlotData(SlotData* packet);
     void updateWorlds(UnlockWorld* packet);
     void receiveCheck(Check* packet);
     void receiveDeath(Deathlink* packet);

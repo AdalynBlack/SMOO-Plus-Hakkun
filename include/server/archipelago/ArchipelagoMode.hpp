@@ -97,9 +97,25 @@ public:
     void setRecentShine(Shine* curShine);
     Shine* getRecentShine() { return mRecentShine; }
 
+    void setWorldUnlockCount(int worldId, int count);
     int getWorldUnlockCount(int worldId);
-    bool getRegionalsFlag() { return mRegionalsEnabled; }
-    bool getCapturesFlag() { return mCapturesEnabled; }
+    void setRegionalsFlag(bool value) { mRegionalsEnabled = value; };
+    bool getRegionalsFlag() { return mRegionalsEnabled; };
+    void setCapturesFlag(bool value) { mCapturesEnabled = value; };
+    bool getCapturesFlag() { return mCapturesEnabled; };
+
+    void setGameName(int index, const char16_t* name);
+    void setSlotName(int index, const char16_t* name);
+    void setItemName(int index, const char16_t* name);
+    void setShineItemName(int index, const char* name);
+
+    void setShineTextReplacement(int index, shineReplaceText replace);
+    void setShineColors(int index, u8 replace);
+    void setClothesTextReplacement(int index, shopReplaceText replace);
+    void setCapTextReplacement(int index, shopReplaceText replace);
+    void setSouvenirTextReplacement(int index, shopReplaceText replace);
+    void setStickerTextReplacement(int index, shopReplaceText replace);
+    void setShopMoonTextReplacement(int index, shopReplaceText replace);
 
     const char* getShineReplacementText();
     int getShineColor(Shine* curShine);
@@ -111,21 +127,23 @@ public:
     bool isApDeath() { return mApDeath; }
 
     // ===== Archipeligo Packet Senders =====
-    void sendCheckPacket(int locationId, CheckType itemType);
-    void sendCheckPacket(CheckType itemType, const char* objId, const char* stageName);
-    void sendDeathlinkPacket();
+    // void sendCheckPacket(int locationId, CheckType itemType);
+    // void sendCheckPacket(CheckType itemType, const char* objId, const char* stageName);
+    // void sendDeathlinkPacket();
+    void sendMoonCheck(int uid);
+    void sendShopCheck(const ShopItem::ItemInfo* itemInfo);
+    void sendRegionalCoinCheck(const char* objId, const char* stageName);
+    void sendCaptureCheck(const char* hackName);
 
     // ===== Archipeligo Packet Handlers =====
     // void updateChatMessages(ArchipelagoChatMessage* packet);
-    void addApInfo(ApInfo* packet);
-    void updateSentShines(ShineChecks* packet);
-    void updateShineReplace(ShineReplacePacket* packet);
-    void updateShineColor(ShineColor* packet);
-    void updateShopReplace(ShopReplacePacket* packet);
-    void updateSlotData(SlotData* packet);
-    void updateWorlds(UnlockWorld* packet);
-    void receiveCheck(Check* packet);
-    void receiveDeath(Deathlink* packet);
+    // void addApInfo(ApInfo* packet);
+    // void updateSentShines(ShineChecks* packet);
+    // void updateShineReplace(ShineReplacePacket* packet);
+    // void updateShineColor(ShineColor* packet);
+    // void updateShopReplace(ShopReplacePacket* packet);
+    // void updateSlotData(SlotData* packet);
+    // void updateWorlds(UnlockWorld* packet);
 
     PlayerActorHakoniwa* getPlayerActorHakoniwa();  // Returns nullptr if the player is not a PlayerActorHakoniwa
 
@@ -179,7 +197,7 @@ private:
     // Moon Text Replacement Handling
     Shine* mRecentShine = nullptr;
     sead::SafeArray<shineReplaceText, 100> shineTextReplacements;
-    sead::SafeArray<sead::FixedSafeString<40>, 100> shineItemNames;
+    sead::SafeArray<sead::FixedSafeString<40>, 100> mShineItemNames;
 
     // Moon Color Replacement
     sead::SafeArray<s8, 1170> shineColors;
@@ -190,9 +208,9 @@ private:
     sead::SafeArray<shopReplaceText, 17> shopStickerTextReplacements;
     sead::SafeArray<shopReplaceText, 26> shopGiftTextReplacements;
     sead::SafeArray<shopReplaceText, 13> shopMoonTextReplacements;
-    sead::SafeArray<sead::WFixedSafeString<40>, 144> apGameNames;
-    sead::SafeArray<sead::WFixedSafeString<40>, 144> apSlotNames;
-    sead::SafeArray<sead::WFixedSafeString<40>, 144> apItemNames;
+    sead::SafeArray<sead::WFixedSafeString<40>, 144> mGameNames;
+    sead::SafeArray<sead::WFixedSafeString<40>, 144> mSlotNames;
+    sead::SafeArray<sead::WFixedSafeString<40>, 144> mItemNames;
     int numApGames = 0;
     int numApSlots = 0;
     int numApItems = 0;

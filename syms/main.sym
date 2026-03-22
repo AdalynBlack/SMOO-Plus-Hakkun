@@ -720,6 +720,9 @@ _ZNK14GameDataHolder18findUnlockShineNumEPbi
 _ZN16GameDataFunction18findUnlockShineNumEPb22GameDataHolderAccessor
 _ZNK12GameDataFile30findUnlockShineNumCurrentWorldEPb
 
+_ZN12GameDataFile7buyItemEPKN8ShopItem8ItemInfoEb
+
+
 _ZN10StageScene7exePlayEv
 
 _ZN5Shine6exeGotEv

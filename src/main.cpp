@@ -166,7 +166,7 @@ HkTrampoline<void, GameDataHolderWriter, ShineInfo*> sendShinePacketHook = hk::h
         for (int x = 0; x < 0x400; x++) {
             GameDataFile::HintInfo* curInfo = &writer->getGameDataFile()->getHintList()[x];
             if (info->mStageName == curInfo->stageName && info->mObjId == curInfo->objId) {
-                GameModeManager::instance()->getMode<ArchipelagoMode>()->sendCheckPacket(curInfo->uniqueId, CheckType::Moon);
+                GameModeManager::instance()->getMode<ArchipelagoMode>()->sendMoonCheck(curInfo->uniqueId);
             }
         }
     }
@@ -1000,7 +1000,8 @@ extern "C" void hkMain() {
     isGrabShineByHintInfoIdxHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessori">();
     isGrabShineByWorldIdHintIdxHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessorii">();
 
-    getUnlockShineNumHook.installAtSym<"_ZNK14GameDataHolder18findUnlockShineNumEPbi">();
+    getUnlockShineNumHook.installAtSym<"_ZNK14GameDataHolder18findUnlockShineNumEPbi">();  // Change unlock requirements
+    buyItemHook.installAtSym<"_ZN12GameDataFile7buyItemEPKN8ShopItem8ItemInfoEb">();       // Item Checks
     //.installAtSym<"">();
     //.installAtSym<"_ZNK12GameDataFile30findUnlockShineNumCurrentWorldEPb">();
 }

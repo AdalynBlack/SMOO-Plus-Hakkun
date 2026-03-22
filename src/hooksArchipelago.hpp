@@ -131,7 +131,7 @@ static HkTrampoline<int, GameDataHolder*, bool*, int> getUnlockShineNumHook =
 //     return getUnlockShineNumByWorldIdHook.orig(unkBool, thisPtr, worldId);
 // });
 
-bool showHasUnlockShineNumCapMessage(al::IUseSceneObjHolder* sceneObjHolder) {
+static bool showHasUnlockShineNumCapMessage(al::IUseSceneObjHolder* sceneObjHolder) {
     GameDataHolderAccessor accessor = GameDataHolderAccessor(sceneObjHolder);
     if (GameDataFunction::getGotShineNum(accessor, -1) >=
         GameModeManager::instance()->getMode<ArchipelagoMode>()->getWorldUnlockCount(GameDataFunction::getCurrentWorldId(accessor))) {
@@ -139,7 +139,7 @@ bool showHasUnlockShineNumCapMessage(al::IUseSceneObjHolder* sceneObjHolder) {
             CapMessageMoonNotifier* notifier = (CapMessageMoonNotifier*)al::getSceneObj(sceneObjHolder, 5);
             /*notifier->unlockShineNum =
                 Client::getWorldUnlockCount(GameDataFunction::getCurrentWorldId(accessor));*/
-            Client::setMessage(1, "Has Enough Moons for notification.");
+            // Client::setMessage(1, "Has Enough Moons for notification.");
             return notifier->tryShowCapMessageMoonNotify();
         }
         return false;
@@ -147,8 +147,19 @@ bool showHasUnlockShineNumCapMessage(al::IUseSceneObjHolder* sceneObjHolder) {
     return false;
 }
 
+// ===== Shop Items =====
+static HkTrampoline<void, GameDataFile*, ShopItem::ItemInfo*, bool> buyItemHook =
+    hk::hook::trampoline([](GameDataFile* file, ShopItem::ItemInfo* itemInfo, bool unkBool) -> void {
+        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+            GameModeManager::instance()->getMode<ArchipelagoMode>()->sendShopCheck(itemInfo);
+        } else {
+            // Send buy item packet here
+            buyItemHook.orig(file, itemInfo, unkBool);
+        }
+    });
+
 // ===== Stage Changing =====
-void onGrandShineStageChange(GameDataHolderWriter holder, ChangeStageInfo const* stageInfo) {
+static void onGrandShineStageChange(GameDataHolderWriter holder, ChangeStageInfo const* stageInfo) {
     GameModeManager::instance()->getMode<ArchipelagoMode>()->sendStage(holder, stageInfo);
 }
 
@@ -161,7 +172,7 @@ static void changeNextStage(GameDataFile* file, const ChangeStageInfo* stageInfo
 
         if (!(al::isEqualString(stageInfo->mChangeStageId.cstr(), "obj846") || al::isEqualString(stageInfo->mChangeStageId.cstr(), "obj1084"))) {
             if (isPartOf(stageInfo->mChangeStageName.cstr(), "WorldHomeStage")) {
-                if (Client::setScenario(stageInfo->mChangeStageName.cstr(), stageInfo->mScenarioNo)) {
+                if (GameModeManager::instance()->getMode<ArchipelagoMode>()->setScenario(stageInfo->mChangeStageName.cstr(), stageInfo->mScenarioNo)) {
                     // Client::setMessage(2, "attempting send to correct scenario");
                     GameModeManager::instance()->getMode<ArchipelagoMode>()->sendCorrectScenario(stageInfo);
 
@@ -183,36 +194,36 @@ static void changeNextStage(GameDataFile* file, const ChangeStageInfo* stageInfo
 }
 
 // includes paintings
-static HkTrampoline<void, GameDataFile*, const ChangeStageInfo*, int> changeNextStageHook =
-    hk::hook::trampoline([](GameDataFile* file, const ChangeStageInfo* stageInfo, int param2) -> void {
-        if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-            changeNextStageHook.orig(file, stageInfo, param2);
-        } else {
-            // Client::setMessage(1, stageInfo->mChangeStageId.cstr());
-            //  Add Wooded shop moon warp
+// static HkTrampoline<void, GameDataFile*, const ChangeStageInfo*, int> changeNextStageHook =
+//     hk::hook::trampoline([](GameDataFile* file, const ChangeStageInfo* stageInfo, int param2) -> void {
+//         if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+//             changeNextStageHook.orig(file, stageInfo, param2);
+//         } else {
+//             // Client::setMessage(1, stageInfo->mChangeStageId.cstr());
+//             //  Add Wooded shop moon warp
 
-            if (!(al::isEqualString(stageInfo->mChangeStageId.cstr(), "obj846") || al::isEqualString(stageInfo->mChangeStageId.cstr(), "obj1084"))) {
-                if (isPartOf(stageInfo->mChangeStageName.cstr(), "WorldHomeStage")) {
-                    if (Client::setScenario(stageInfo->mChangeStageName.cstr(), stageInfo->mScenarioNo)) {
-                        // Client::setMessage(2, "attempting send to correct scenario");
-                        GameModeManager::instance()->getMode<ArchipelagoMode>()->sendCorrectScenario(stageInfo);
+//             if (!(al::isEqualString(stageInfo->mChangeStageId.cstr(), "obj846") || al::isEqualString(stageInfo->mChangeStageId.cstr(), "obj1084"))) {
+//                 if (isPartOf(stageInfo->mChangeStageName.cstr(), "WorldHomeStage")) {
+//                     if (Client::setScenario(stageInfo->mChangeStageName.cstr(), stageInfo->mScenarioNo)) {
+//                         // Client::setMessage(2, "attempting send to correct scenario");
+//                         GameModeManager::instance()->getMode<ArchipelagoMode>()->sendCorrectScenario(stageInfo);
 
-                    } else {
-                        // Client::setMessage(2, "setScenario false");
-                        file->changeNextStage(stageInfo, param2);
-                    }
-                } else {
-                    // Non world transitions
-                    // Client::setMessage(2, "non world transition");
-                    file->changeNextStage(stageInfo, param2);
-                }
-            } else {
-                // Catch cap and cascade shop moons
-                // Client::setMessage(2, "Shop moon stageID caught");
-                file->changeNextStage(stageInfo, param2);
-            }
-        }
-    });
+//                     } else {
+//                         // Client::setMessage(2, "setScenario false");
+//                         file->changeNextStage(stageInfo, param2);
+//                     }
+//                 } else {
+//                     // Non world transitions
+//                     // Client::setMessage(2, "non world transition");
+//                     file->changeNextStage(stageInfo, param2);
+//                 }
+//             } else {
+//                 // Catch cap and cascade shop moons
+//                 // Client::setMessage(2, "Shop moon stageID caught");
+//                 file->changeNextStage(stageInfo, param2);
+//             }
+//         }
+//     });
 
 // ===== Shine Data Replacement =====
 static bool isReplaceShineLabel(al::LayoutActor* layout, char const* element, char const* label, char const* param4) {
@@ -272,7 +283,7 @@ static void onAddHack(GameDataHolderWriter writer, const char* hackName) {
     GameModeManager* manager = GameModeManager::instance();
     if (manager->isMode(GameMode::ARCHIPELAGO) && manager->getMode<ArchipelagoMode>()->getCapturesFlag()) {
         // Client::setMessage(2, hackName);
-        manager->getMode<ArchipelagoMode>()->sendCheckPacket(getIndexCaptureList(hackName), CheckType::Capture);
+        manager->getMode<ArchipelagoMode>()->sendCaptureCheck(hackName);
         manager->getMode<ArchipelagoMode>()->setIsRecordCapture(true);
     } else {
         GameDataFunction::addHackDictionary(writer, hackName);
