@@ -2,6 +2,11 @@
 
 #include <stdint.h>
 
+#include "Layout/CommonVerticalList.h"
+#include "Library/Layout/LayoutActionFunction.h"
+#include "Library/Memory/HeapUtil.h"
+#include "Library/Play/Layout/RollParts.h"
+#include "Scene/StageSceneStateModConfig.hpp"
 #include "server/archipelago/ArchipelagoInfo.h"
 #include "server/Client.hpp"
 #include "server/gamemode/GameModeManager.hpp"
@@ -10,7 +15,7 @@ ArchipelagoConfigMenu::ArchipelagoConfigMenu() : GameModeConfigMenu() {
     mIPKeyboard = new Keyboard(15);
     if (mIPKeyboard) {
         mIPKeyboard->setHeaderText(u"Set Client IP Address");
-        mIPKeyboard->setSubText(u"This is the Local Address of the Computer the Client is running on.");
+        mIPKeyboard->setSubText(u"");
     }
 
     // mPortKeyboard = new Keyboard(5);
@@ -20,8 +25,15 @@ ArchipelagoConfigMenu::ArchipelagoConfigMenu() : GameModeConfigMenu() {
     // }
 }
 
+void ArchipelagoConfigMenu::initMenu() {
+    ArchipelagoInfo* curMode = GameModeManager::instance()->getInfo<ArchipelagoInfo>();
+    StageSceneStateModConfig::setMenuItemBase(mList->mListPartsArr[1]);
+    StageSceneStateModConfig::setMenuItemBase(mList->mListPartsArr[2]);
+}
+
 const sead::WFixedSafeString<0x200>* ArchipelagoConfigMenu::getStringData() {
     mItems[0].copy(u"Client IP");
+    mItems[1].copy(u"Reconnect to Client");
 
     return mItems.mBuffer;
 }
@@ -35,10 +47,9 @@ GameModeConfigMenu::UpdateAction ArchipelagoConfigMenu::updateMenu(int selectInd
 
     switch (selectIndex) {
     case 0: {
+        // Set Client IP
         if (mIPKeyboard) {
-            char buf[15];
-
-            mIPKeyboard->openKeyboard(buf, [](nn::swkbd::KeyboardConfig& config) {
+            mIPKeyboard->openKeyboard(Client::getApClientIP(), [](nn::swkbd::KeyboardConfig& config) {
                 config.keyboardMode = nn::swkbd::KeyboardMode::ModeASCII;
                 config.textMaxLength = 15;
                 config.textMinLength = 7;
@@ -55,44 +66,18 @@ GameModeConfigMenu::UpdateAction ArchipelagoConfigMenu::updateMenu(int selectInd
                 if (result && result[0] != '\0') {
                     // set APIP memember in client here
                     Client::setApClientIP(result);
+                    Client::setConnectStatusMsg(u"Connecting to Client...");
+                    // Client::restartConnection();
                 }
             }
         }
         return GameModeConfigMenu::UpdateAction::NOOP;
     }
-    // case 1: {
-    //     if (mPortKeyboard) {
-    //         curMode->mIsHostMode = true;
-
-    //        uint8_t oldTime = curMode->mRoundLength;
-
-    //        char buf[4];
-    //        nn::util::SNPrintf(buf, 4, "%u", oldTime);
-
-    //        mPortKeyboard->openKeyboard(buf, [](nn::swkbd::KeyboardConfig& config) {
-    //            config.keyboardMode = nn::swkbd::KeyboardMode::ModeNumeric;
-    //            config.textMaxLength = 5;
-    //            config.textMinLength = 1;
-    //            config.isUseUtf8 = true;
-    //            config.inputFormMode = nn::swkbd::InputFormMode::OneLine;
-    //        });
-
-    //        while (!mPortKeyboard->isThreadDone()) {
-    //            nn::os::YieldThread();
-    //        }
-
-    //        if (!mPortKeyboard->isKeyboardCancelled()) {
-    //            const char* result = mPortKeyboard->getResult();
-    //            if (result && result[0] != '\0') {
-    //                int newTime = atoi(result);
-    //                if (newTime >= 2 && newTime <= 60) {
-    //                    curMode->mRoundLength = (uint8_t)newTime;
-    //                }
-    //            }
-    //        }
-    //    }
-    //    return GameModeConfigMenu::UpdateAction::NOOP;
-    //}
+    case 1: {
+        Client::setConnectStatusMsg(u"Connecting to Client...");
+        Client::restartConnection();
+        return GameModeConfigMenu::UpdateAction::NOOP;
+    }
     default:
         return GameModeConfigMenu::UpdateAction::NOOP;
     }

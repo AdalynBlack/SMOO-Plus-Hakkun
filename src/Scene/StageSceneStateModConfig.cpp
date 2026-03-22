@@ -819,20 +819,17 @@ void StageSceneStateModConfig::appear() {
 
 void StageSceneStateModConfig::kill() {
     if (Client::hasServerChanged()) {
-        int mode = GameModeManager::instance()->getGameMode();
-        if (mode == GameMode::ARCHIPELAGO) {
-            Client::setConnectStatusMsg(u"Connecting to Client...");
-
-        } else {
+        if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO))
             Client::setConnectStatusMsg(u"Connecting to Server...");
 
-            if (Client::get()->mIsAllowReconnect)
-                Client::restartConnection();
-            Client::showUIMessage(Client::get()->mIsAllowReconnect ? u"Reconnecting..." : u"Server changed. Please restart the game.");
-            for (int i = 0; i < 240; i++)
-                nn::os::YieldThread();
-            Client::hideUIMessage();
-        }
+        if (Client::get()->mIsAllowReconnect)
+            Client::restartConnection();
+        Client::showUIMessage((Client::get()->mIsAllowReconnect || GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) ?
+                                  u"Reconnecting..." :
+                                  u"Server changed. Please restart the game.");
+        for (int i = 0; i < 240; i++)
+            nn::os::YieldThread();
+        Client::hideUIMessage();
     }
     mCurrentMenu->startEnd("End");
     al::NerveStateBase::kill();

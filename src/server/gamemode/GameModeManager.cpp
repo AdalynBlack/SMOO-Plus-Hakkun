@@ -14,7 +14,7 @@
 SEAD_SINGLETON_DISPOSER_IMPL(GameModeManager)
 
 GameModeManager::GameModeManager() {
-    mHeap = sead::ExpHeap::create(400000, "GameModeHeap", al::getSequenceHeap(), 8, sead::Heap::HeapDirection::cHeapDirection_Reverse, false);
+    mHeap = sead::ExpHeap::create(400_KB, "GameModeHeap", al::getSequenceHeap(), 8, sead::Heap::HeapDirection::cHeapDirection_Reverse, false);
     setMode(GameMode::HIDEANDSEEK);
 }
 

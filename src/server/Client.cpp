@@ -154,7 +154,7 @@ bool Client::startThread() {
 }
 
 void Client::restartConnection() {
-    if (!sInstance->mIsAllowReconnect)
+    if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO) && !sInstance->mIsAllowReconnect)
         return;
 
     // send disconnect packet
@@ -182,7 +182,11 @@ void Client::restartConnection() {
     sInstance->mSocket->startEndThread();
 
     while (!sInstance->mIsConnectionActive) {
-        sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mServerIP.cstr(), sInstance->mServerPort).IsSuccess();
+        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+            sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mApClientIP.cstr(), 1027).IsSuccess();
+        } else {
+            sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mServerIP.cstr(), sInstance->mServerPort).IsSuccess();
+        }
         nn::os::YieldThread();
         nn::os::SleepThread(nn::TimeSpan::FromMilliSeconds(250));  // BAD
     }
@@ -239,7 +243,15 @@ bool Client::startConnection() {
         SaveDataAccessFunction::startSaveDataWrite(mHolder.mData);
     }
 
-    mIsConnectionActive = mSocket->init(mServerIP.cstr(), mServerPort).IsSuccess();
+    while (!sInstance->mIsConnectionActive) {
+        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+            sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mApClientIP.cstr(), 1027).IsSuccess();
+        } else {
+            sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mServerIP.cstr(), sInstance->mServerPort).IsSuccess();
+        }
+        nn::os::YieldThread();
+        nn::os::SleepThread(nn::TimeSpan::FromMilliSeconds(250));  // BAD
+    }
 
     if (mIsConnectionActive) {
         Logger::log("Sucessful Connection. Waiting to recieve init packet.\n");

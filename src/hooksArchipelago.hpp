@@ -42,7 +42,7 @@ static bool isGrabShine(GameDataHolderAccessor accessor, int hintIdx) {
 
 static HkTrampoline<bool, GameDataHolderAccessor, const ShineInfo*> isGrabShineByShineInfoHook =
     hk::hook::trampoline([](GameDataHolderAccessor accessor, const ShineInfo* shineInfo) -> bool {
-        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
             int i = 0;
             for (i = 0; i < 0x400; i++) {
                 GameDataFile::HintInfo* curHintInfo = &accessor.mData->getGameDataFile()->getHintList()[i];
@@ -50,8 +50,12 @@ static HkTrampoline<bool, GameDataHolderAccessor, const ShineInfo*> isGrabShineB
                     break;
                 }
             }
+            if (i < 0x400) {
+                return isGrabShine(accessor, i);
+            } else {
+                return false;
+            }
 
-            return isGrabShine(accessor, i);
         } else {
             return isGrabShineByShineInfoHook.orig(accessor, shineInfo);
         }
@@ -59,7 +63,7 @@ static HkTrampoline<bool, GameDataHolderAccessor, const ShineInfo*> isGrabShineB
 
 static HkTrampoline<bool, GameDataHolderAccessor, int> isGrabShineByHintInfoIdxHook =
     hk::hook::trampoline([](GameDataHolderAccessor accessor, int hintIdx) -> bool {
-        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
             return isGrabShine(accessor, hintIdx);
         } else {
             return isGrabShineByHintInfoIdxHook.orig(accessor, hintIdx);
@@ -69,7 +73,7 @@ static HkTrampoline<bool, GameDataHolderAccessor, int> isGrabShineByHintInfoIdxH
 static HkTrampoline<bool, GameDataHolderAccessor, int, int> isGrabShineByWorldIdHintIdxHook =
     hk::hook::trampoline([](GameDataHolderAccessor accessor, int worldId, int hintIdx) -> bool {
         // Examine if not performing check for moon rock scenario causes unintended behavior in game
-        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
             return isGrabShine(accessor, hintIdx);
         } else {
             return isGrabShineByWorldIdHintIdxHook.orig(accessor, worldId, hintIdx);
@@ -156,8 +160,12 @@ static HkTrampoline<void, GameDataFile*, ShopItem::ItemInfo*, bool> buyItemHook 
     });
 
 // ===== Stage Changing =====
-static void onGrandShineStageChange(GameDataHolderWriter holder, ChangeStageInfo const* stageInfo) {
-    GameModeManager::instance()->getMode<ArchipelagoMode>()->sendStage(holder, stageInfo);
+static void onGrandShineStageChange(GameDataHolderWriter writer, ChangeStageInfo const* stageInfo) {
+    if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        GameModeManager::instance()->getMode<ArchipelagoMode>()->sendStage(writer, stageInfo);
+    } else {
+        GameDataFunction::tryChangeNextStage(writer, stageInfo);
+    }
 }
 
 static void changeNextStage(GameDataFile* file, const ChangeStageInfo* stageInfo, int param2) {
@@ -238,15 +246,23 @@ static void setShineLabel(al::IUseLayout* layout, const char* elementLabel) {
 static void setShineColor(Shine* thisPtr, char* stageName, int color, bool isSetMtpColor) {
     // Get color here using shine unique id
     // Client::setMessage(1, "Set custom shine color");
-    int storedColor = GameModeManager::instance()->getMode<ArchipelagoMode>()->getShineColor(thisPtr);
-    rs::setStageShineAnimFrame((al::LiveActor*)thisPtr, stageName, storedColor, isSetMtpColor);
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        int storedColor = GameModeManager::instance()->getMode<ArchipelagoMode>()->getShineColor(thisPtr);
+        rs::setStageShineAnimFrame((al::LiveActor*)thisPtr, stageName, storedColor, isSetMtpColor);
+    } else {
+        rs::setStageShineAnimFrame((al::LiveActor*)thisPtr, stageName, color, isSetMtpColor);
+    }
 }
 
 static void setShineModelColor(Shine* thisPtr, char* stageName, int color, bool isSetMtpColor) {
     // Get color here using shine unique id
     // Client::setMessage(1, "Set custom other shine color");
-    int storedColor = GameModeManager::instance()->getMode<ArchipelagoMode>()->getShineColor(thisPtr);
-    rs::setStageShineAnimFrame(thisPtr->mModelShine, stageName, storedColor, isSetMtpColor);
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        int storedColor = GameModeManager::instance()->getMode<ArchipelagoMode>()->getShineColor(thisPtr);
+        rs::setStageShineAnimFrame(thisPtr->mModelShine, stageName, storedColor, isSetMtpColor);
+    } else {
+        rs::setStageShineAnimFrame(thisPtr->mModelShine, stageName, color, isSetMtpColor);
+    }
 }
 
 // ===== Shop Data Replacement =====
@@ -270,7 +286,7 @@ static bool isBuyItems(ShopItem::ItemInfo* itemInfo) {
     if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
         return false;
     } else {
-        return false;  // Client::sInstance->getHolder()->getGameDataFile()->isBuyItem(itemInfo);
+        return Client::get()->getHolder()->getGameDataFile()->isBuyItem(itemInfo);
     }
 }
 

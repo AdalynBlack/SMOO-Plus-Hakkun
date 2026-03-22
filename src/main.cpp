@@ -996,7 +996,7 @@ extern "C" void hkMain() {
     hk::hook::writeBranchLinkAtMainOffset(0x51DA40, changeNextStage);          // Scenario updating via Odyssey
 
     // Grab Shine replace
-    isGrabShineByShineInfoHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessorPK9ShineInfo">();
+    // isGrabShineByShineInfoHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessorPK9ShineInfo">();
     isGrabShineByHintInfoIdxHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessori">();
     isGrabShineByWorldIdHintIdxHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessorii">();
 
