@@ -11,7 +11,3 @@ public:
     void* qword110;
     al::PlacementId* mPlacementId;
 };
-
-namespace rs {
-void setGrowFlowerTime(const al::LiveActor*, const al::PlacementId*, u64);
-}

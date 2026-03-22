@@ -3,29 +3,19 @@
 #include "al/Library/Camera/CameraTicket.h"
 
 #include "game/Layout/ShopLayoutInfo.h"
-#include "game/Player/PlayerActorBase.h"
-#include "game/Player/PlayerActorHakoniwa.h"
 #include "game/Sequence/ChangeStageInfo.h"
-#include "game/Sequence/HakoniwaSequence.h"
-#include "game/System/GameDataHolder.h"
-#include "game/System/GameDataHolderAccessor.h"
 #include "game/System/GameDataHolderWriter.h"
 
 #include <math.h>
 #include <stdint.h>
 
-// #include "layouts/FreezeTagIcon.h"
-// #include "packets/FreezeInf.h"
-// #include "puppets/PuppetInfo.h"
 #include "container/seadSafeArray.h"
 #include "heap/seadExpHeap.h"
-#include "packets/Packet.h"
 #include "server/archipelago/ArchipelagoHelpers.hpp"
 #include "server/archipelago/ArchipelagoHintArrow.h"
 #include "server/archipelago/ArchipelagoInfo.h"
 #include "server/gamemode/GameMode.h"
 #include "server/gamemode/GameModeBase.hpp"
-// #include "server/archipelago/ArchipelagoModeUtil.hpp"
 
 enum CheckType { Coins = -2, Moon = -1, Clothes = 0, Cap = 1, Souvenir = 2, Sticker = 3, RegionalCoin = 4, Capture = 5 };
 
@@ -44,9 +34,6 @@ public:
     void debugMenuControls() override;
 
     bool isUseNormalUI() const override { return true; }
-
-    // void processPacket(Packet* packet) override;
-    // Packet* createPacket() override;
 
     // ===== Arcipelago Setters / Getters =====
     void setScenario(int worldID, int scenario);
@@ -126,24 +113,11 @@ public:
     bool isDying() { return mDying; }
     bool isApDeath() { return mApDeath; }
 
-    // ===== Archipeligo Packet Senders =====
-    // void sendCheckPacket(int locationId, CheckType itemType);
-    // void sendCheckPacket(CheckType itemType, const char* objId, const char* stageName);
-    // void sendDeathlinkPacket();
+    // ===== Archipeligo Check Senders =====
     void sendMoonCheck(int uid);
     void sendShopCheck(const ShopItem::ItemInfo* itemInfo);
     void sendRegionalCoinCheck(const char* objId, const char* stageName);
     void sendCaptureCheck(const char* hackName);
-
-    // ===== Archipeligo Packet Handlers =====
-    // void updateChatMessages(ArchipelagoChatMessage* packet);
-    // void addApInfo(ApInfo* packet);
-    // void updateSentShines(ShineChecks* packet);
-    // void updateShineReplace(ShineReplacePacket* packet);
-    // void updateShineColor(ShineColor* packet);
-    // void updateShopReplace(ShopReplacePacket* packet);
-    // void updateSlotData(SlotData* packet);
-    // void updateWorlds(UnlockWorld* packet);
 
     PlayerActorHakoniwa* getPlayerActorHakoniwa();  // Returns nullptr if the player is not a PlayerActorHakoniwa
 

@@ -585,7 +585,7 @@ void Client::readFunc() {
                 updateShopReplace((ShopReplacePacket*)curPacket);
                 break;
             case PacketType::UNLOCKWORLD:
-                updateWorlds((UnlockWorld*)curPacket);
+                // updateWorlds((UnlockWorld*)curPacket);
                 break;
             case PacketType::DEATHLINK:
                 receiveDeath((Deathlink*)curPacket);

@@ -14,15 +14,12 @@
 
 #include "game/Actors/GrowFlowerPot.h"
 #include "game/Demo/DemoStateHackFirst.h"
-#include "game/Item/Shine.h"
-#include "game/Layout/ShopLayoutInfo.h"
 #include "game/Scene/CapMessageMoonNotifier.h"
 #include "game/Sequence/ChangeStageInfo.h"
 #include "game/System/GameDataFile.h"
 #include "game/System/GameDataFunction.h"
 #include "game/System/GameDataHolder.h"
-#include "game/System/GameDataHolderAccessor.h"
-#include "game/System/GameDataHolderWriter.h"
+#include "game/System/GameDataUtil.h"
 #include "game/Util/ItemUtil.h"
 #include "game/Util/StageLayoutFunction.h"
 
@@ -273,7 +270,7 @@ static bool isBuyItems(ShopItem::ItemInfo* itemInfo) {
     if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
         return false;
     } else {
-        return Client::sInstance->getHolder()->getGameDataFile()->isBuyItem(itemInfo);
+        return false;  // Client::sInstance->getHolder()->getGameDataFile()->isBuyItem(itemInfo);
     }
 }
 

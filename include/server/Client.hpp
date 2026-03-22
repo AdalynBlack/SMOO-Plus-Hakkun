@@ -288,7 +288,7 @@ private:
     void updateShineReplace(ShineReplacePacket* packet);
     void updateShineColor(ShineColor* packet);
     void updateShopReplace(ShopReplacePacket* packet);
-    void updateWorlds(UnlockWorld* packet);
+    // void updateWorlds(UnlockWorld* packet); // For unimplemented feautre
     void receiveCheck(Check* packet);
     void receiveDeath(Deathlink* packet);
 

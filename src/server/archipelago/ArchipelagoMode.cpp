@@ -19,6 +19,7 @@
 #include "game/Player/PlayerAnimator.h"
 #include "game/Player/PlayerFunction.h"
 #include "game/Player/PlayerHackKeeper.h"
+#include "game/Scene/StageScene.h"
 #include "game/System/GameDataFile.h"
 #include "game/System/GameDataFunction.h"
 #include "game/System/GameDataHolderAccessor.h"
@@ -45,10 +46,10 @@
 ArchipelagoMode::ArchipelagoMode(const char* name) : GameModeBase(name) {}
 
 void ArchipelagoMode::init(const GameModeInitInfo& info) {
-    mHeap = sead::ExpHeap::create(60000, "ArchipelagoHeap", sead::HeapMgr::instance()->getCurrentHeap(), 8, sead::Heap::cHeapDirection_Forward, false);
-    // Approx size = 50608
-    // Approx 9392 extra bytes allocated
-    sead::ScopedCurrentHeapSetter heapSetter(mHeap);
+    // mHeap = sead::ExpHeap::create(60000, "ArchipelagoHeap", sead::HeapMgr::instance()->getCurrentHeap(), 8, sead::Heap::cHeapDirection_Forward, false);
+    // // Approx size = 50608
+    // // Approx 9392 extra bytes allocated
+    // sead::ScopedCurrentHeapSetter heapSetter(mHeap);
 
     mSceneObjHolder = info.mSceneObjHolder;
     mMode = info.mMode;
@@ -1098,13 +1099,13 @@ void ArchipelagoMode::update() {
 }
 
 void ArchipelagoMode::debugMenuControls() {
-    ImGui::Text("- L + ← | Enable/disable Freeze Tag [FT]\n");
-    ImGui::Text("- [FT] ↑ | Switch between runners and chasers\n");
-    ImGui::Text("- [FT] L + ↓ | Reset score\n");
+    // ImGui::Text("- L + ← | Enable/disable Freeze Tag [FT]\n");
+    // ImGui::Text("- [FT] ↑ | Switch between runners and chasers\n");
+    // ImGui::Text("- [FT] L + ↓ | Reset score\n");
 
-    if (mInfo->mIsDebugMode) {
-        ImGui::Text("- [FT][Debug] A + → | Increment score\n");
-        ImGui::Text("- [FT][Debug] A + ← | Set time to 01:05\n");
-        ImGui::Text("- [FT][Debug] B + → | Wipeout\n");
-    }
+    // if (mInfo->mIsDebugMode) {
+    //     ImGui::Text("- [FT][Debug] A + → | Increment score\n");
+    //     ImGui::Text("- [FT][Debug] A + ← | Set time to 01:05\n");
+    //     ImGui::Text("- [FT][Debug] B + → | Wipeout\n");
+    // }
 }
