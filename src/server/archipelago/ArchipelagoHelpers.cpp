@@ -2,6 +2,8 @@
 
 #include "al/Library/Base/StringUtil.h"
 
+#include "helpers.hpp"
+
 bool isInApCostumeList(const char* costumeName) {
     for (size_t i = 0; i < sizeof(costumeNamesByCheckId) / sizeof(costumeNamesByCheckId[0]); i++) {
         if (al::isEqualString(costumeNamesByCheckId[i], costumeName)) {
@@ -57,23 +59,71 @@ int getIndexMoonItemList(const char* moonItem) {
 }
 
 // Stage stuff for ER
-// int getIndexStageIdList(const char* stageId) {
-//    for (size_t i = 0; i < sizeof(changeStageIdList) / sizeof(changeStageIdList[0]); i++) {
-//        if (al::isEqualString(changeStageIdList[i], stageId)) {
-//            return i;
-//        }
-//    }
-//    return -1;
-//}
-//
-// int getIndexStageNameList(const char* stangeName) {
-//    for (size_t i = 0; i < sizeof(changeStageNameList) / sizeof(changeStageNameList[0]); i++) {
-//        if (al::isEqualString(changeStageNameList[i], stangeName)) {
-//            return i;
-//        }
-//    }
-//    return -1;
-//}
+int getIndexStageIdList(const char* stageId) {
+    for (size_t i = 0; i < sizeof(stageIdList) / sizeof(stageIdList[0]); i++) {
+        if (al::isEqualString(stageIdList[i], stageId)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int getIndexStageNameList(const char* stageName) {
+    for (size_t i = 0; i < sizeof(stageNameList) / sizeof(stageNameList[0]); i++) {
+        if (al::isEqualString(stageNameList[i], stageName)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int getIndexRegionalCoinStageList(const char* stageName) {
+    for (size_t i = 0; i < sizeof(regionalCoinStages) / sizeof(regionalCoinStages[0]); i++) {
+        if (al::isEqualString(regionalCoinStages[i], stageName)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int getIndexRegionalCoinId(const char* stageName, const char* placementId) {
+    int stageIndex = getIndexRegionalCoinStageList(stageName);
+    if (stageIndex == -1) {
+        return -2;
+    }
+
+    int totalIndex = 0;
+    for (int k = 0; k < stageIndex; k++) {
+        totalIndex += regionalCoinListLengths[k];
+    }
+
+    for (size_t i = 0; i < regionalCoinListLengths[stageIndex]; i++) {
+        if (al::isEqualString(regionalCoinsByCheckId[stageIndex][i], placementId)) {
+            return i + totalIndex;
+        }
+    }
+    return -1;
+}
+
+const char* getWorldStageNameByRegionalCoinStageList(const char* stageName) {
+    int indexLastHomeStage = 0;
+    int index = -1;
+    for (size_t i = 0; i < sizeof(regionalCoinStages) / sizeof(regionalCoinStages[0]); i++) {
+        if (isPartOf(regionalCoinStages[i], "WorldHomeStage")) {
+            indexLastHomeStage = i;
+        }
+        if (al::isEqualString(regionalCoinStages[i], stageName)) {
+            index = i;
+            break;
+        }
+    }
+
+    if (index >= 0) {
+        return regionalCoinStages[indexLastHomeStage];
+    }
+
+    return "CapWorldHomeStage";
+}
 
 const char* intToCstr(int number) {
     sead::FixedSafeString<40> numberStr;

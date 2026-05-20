@@ -62,7 +62,7 @@ public:
 
     // State queries
     bool isScoreEventsEnabled() const { return mIsScoreEventsValid; }
-    bool isPlayerHolder() const { return mInfo->mIsPlayerHolder; }
+    bool isPlayerHolder() const { return mInfo ? mInfo->mIsPlayerHolder : false; }
     float getInvulnTime() const { return mInvulnTime; }
     bool isEndgameActive() { return mIsEndgameActive; }
     ShineThiefInfo* getInfo() const { return mInfo; }
@@ -83,7 +83,7 @@ public:
     void warpToRecoveryPoint(PlayerActorHakoniwa* actor);
     bool trySetPostProcessingType(ShineThiefPostProcessingType type);
     void setWipeHolder(al::WipeHolder* wipe) { mWipeHolder = wipe; }
-    sead::Vector3f getShinePos() { return mInfo->shinePos; };
+    sead::Vector3f getShinePos() { return mInfo ? mInfo->shinePos : sead::Vector3f::zero; };
     void setShinePos(sead::Vector3f pos) { mInfo->shinePos.set(pos); };
     ShineThiefPlayerBlock* getShineBlock() { return mMainPlayerCaptureBlock; };
 

@@ -16,12 +16,16 @@ public:
     const sead::WFixedSafeString<0x200>* getStringData() override;
     GameModeConfigMenu::UpdateAction updateMenu(int selectIndex) override;
 
-    const int getMenuSize() override { return 2; }  // Fixed size for now
+    const int getMenuSize() override { return 7; }  // Fixed size for now
 
     void initMenu() override;
 
 private:
-    static constexpr int mItemCount = 2;
+    static constexpr int mItemCount = 7;
     sead::SafeArray<sead::WFixedSafeString<0x200>, mItemCount> mItems;
     Keyboard* mIPKeyboard = nullptr;
+    Keyboard* mHostNameKeyboard = nullptr;
+    Keyboard* mPortKeyboard = nullptr;
+    Keyboard* mSlotKeyboard = nullptr;
+    Keyboard* mPasswordKeyboard = nullptr;
 };

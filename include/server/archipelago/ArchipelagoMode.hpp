@@ -73,23 +73,34 @@ public:
     bool hasCaptureCheck(const char* capture);
     void setIsRecordCapture(bool value);
 
+    void addRegionalCoin(const char* placementId);
+    void addRegionalCoin(int index);
+    bool hasRegionalCoin(const char* placementId);
+    bool hasRegionalCoin(int index);
+
     void setCheckIndex(int index);
     int getCheckIndex() { return mCheckIndex; };
 
-    void setMessage(int num, const char* msg);
-
-    // sead::FixedSafeString<0x4B> getAPChatMessage1() { return sInstance ? sInstance->apChatLine1 : sead::FixedSafeString<0x20>::cEmptyString; }
-    // sead::FixedSafeString<0x4B> getAPChatMessage2() { return sInstance ? sInstance->apChatLine2 : sead::FixedSafeString<0x20>::cEmptyString; }
-    // sead::FixedSafeString<0x4B> getAPChatMessage3() { return sInstance ? sInstance->apChatLine3 : sead::FixedSafeString<0x20>::cEmptyString; }
-    void setRecentShine(Shine* curShine);
-    Shine* getRecentShine() { return mRecentShine; }
+    void setRecentShineHintIndex(int index);
+    int getRecentShineHintIndex() { return mRecentShineHintIndex; }
 
     void setWorldUnlockCount(int worldId, int count);
     int getWorldUnlockCount(int worldId);
-    void setRegionalsFlag(bool value) { mRegionalsEnabled = value; };
-    bool getRegionalsFlag() { return mRegionalsEnabled; };
+    void setDeathLinkFlag(bool value) { mDeathLinkEnabled = value; };
+    bool getRegionalsFlag() { return mDeathLinkEnabled; };
     void setCapturesFlag(bool value) { mCapturesEnabled = value; };
     bool getCapturesFlag() { return mCapturesEnabled; };
+    void setERFlag(bool value) { mIsEntranceRandomizationEnabled = value; };
+    bool getERFlag() { return mIsEntranceRandomizationEnabled; };
+    void setConnectInitFlag(bool value) { mIsConnectInit = value; };
+    bool getConnectInitFlag() { return mIsConnectInit; };
+    void setCurWorldShineList(int worldId) { mCurWorldShineList = worldId; };
+    int getCurWorldShineList() { return mCurWorldShineList; };
+    void setRelativeWorldCoinCollect(int worldId) { mRelativeWorldCoinCollect = worldId; };
+    void setRelativeWorldCoinCollect(const char* stageName);
+    int getRelativeWorldCoinCollect() { return mRelativeWorldCoinCollect; };
+    void setIsNeedUpdateCounter(bool value) { mIsNeedUpdateCounter = value; };
+    bool getIsNeedUpdateCounter() { return mIsNeedUpdateCounter; };
 
     void setGameName(int index, const char16_t* name);
     void setSlotName(int index, const char16_t* name);
@@ -103,6 +114,8 @@ public:
     void setSouvenirTextReplacement(int index, shopReplaceText replace);
     void setStickerTextReplacement(int index, shopReplaceText replace);
     void setShopMoonTextReplacement(int index, shopReplaceText replace);
+    void setOverWorldStageConnection(int index, stageConnection replace);
+    void setSubAreaStageConnection(int index, stageConnection replace);
 
     const char* getShineReplacementText();
     int getShineColor(Shine* curShine);
@@ -112,6 +125,11 @@ public:
     void setApDeath(bool value);
     bool isDying() { return mDying; }
     bool isApDeath() { return mApDeath; }
+
+    ChangeStageInfo* handleER(const ChangeStageInfo* info);
+
+    bool isTargetAlive();
+    bool trySetHintTargetValid();
 
     // ===== Archipeligo Check Senders =====
     void sendMoonCheck(int uid);
@@ -125,6 +143,19 @@ public:
 
     // ===== Archipelago Utility Methods =====
     void sendStage(GameDataHolderWriter writer, const ChangeStageInfo* stageInfo);
+    void sendBack();
+    void isSubArea(GameDataHolderAccessor accessor, bool* isInSubArea, sead::FixedSafeString<32> stageId);
+    void getCustomStageId(GameDataHolderAccessor accessor, const ChangeStageInfo* info, sead::FixedSafeString<32>* stageId);
+    void correctCustomStageId(sead::FixedSafeString<32>* toStageId);
+    int getNumGotShines();
+    int getNumCoinCollect();
+    void handleDeathLink(PlayerActorBase* playerBase, PlayerActorHakoniwa* playerHakoniwa, GameDataHolderWriter writer);
+    void handleCaptureSanity(PlayerActorBase* playerBase, GameDataHolderAccessor accessor);
+    void getNearestRegional(StageScene* stageScene, PlayerActorBase* playerBase);
+    void handleSoftLocks(GameDataHolderAccessor accessor, GameDataHolderWriter writer);
+    void updateCounter(PlayerActorBase* playerBase, GameDataHolderAccessor accessor);
+    void infoMenu();
+    int getRelativeWorldCoinCollectCheckGotNum(GameDataHolderAccessor accessor);
 
 private:
     al::WipeHolder* mWipeHolder = nullptr;  // Pointer set by setWipeHolder on first step of hakoniwaSequence hook
@@ -134,26 +165,35 @@ private:
     // ptr to the targeted actor so arrow can be deactivated when coin is collected
     al::LiveActor* mCoinCollectHintTarget = nullptr;
 
-    // ===== Archipeligo Heap =====
-    sead::ExpHeap* mHeap = nullptr;
-
     // ===== Archipeligo Data =====
-    sead::FixedSafeString<0x4B> apChatLine1;
-    sead::FixedSafeString<0x4B> apChatLine2;
-    sead::FixedSafeString<0x4B> apChatLine3;
+
+    // Esacape to last trasition or Odyssey
+    // Could just use preexisting
+
+    // Update Timers
+    unsigned short mUpdateCounterTimer = 0;
+    bool mIsNeedUpdateCounter = false;
+    u8 mSoftlockTimer = 0;
+
+    ArchipelagoInfo* mInfo = nullptr;
+    bool mIsInfoMenuOpen = false;
+    short mInfoMenuPageNum = 0;
+    const short mInfoMenuPageMax = 3;
 
     // shine pay counts
     sead::SafeArray<int, 17> mWorldPayCounts;
-    bool mRegionalsEnabled = false;
+    bool mDeathLinkEnabled = false;
     bool mCapturesEnabled = false;
     bool mIsRecordCapture = false;
+    bool mIsEntranceRandomizationEnabled = false;
+    bool mIsConnectInit = false;
     sead::SafeArray<int, 17> mWorldScenarios;
     bool mDying = false;
     bool mApDeath = false;
     int mCheckIndex = 0;
 
     // List of 37 ints to track which shine's have been grabbed
-    sead::SafeArray<int, 37> collectedShines;
+    sead::SafeArray<u8, 148> collectedShines;
 
     // List of 11 u8s for tracking which caps and clothes have been grabbed
     sead::SafeArray<u8, 11> collectedOutfits;
@@ -164,14 +204,33 @@ private:
     // List of 4 u8s for tracking which souvenirs have been grabbed
     sead::SafeArray<u8, 4> collectedSouvenirs;
 
+    // List of 11 u8s for tracking which caps and clothes have been scouted
+    sead::SafeArray<u8, 11> mScoutedOutfits;
+
+    // List of 3 u8s for tracking which stickers have been scouted
+    sead::SafeArray<u8, 3> mScoutedStickers;
+
+    // List of 4 u8s for tracking which souvenirs have been scouted
+    sead::SafeArray<u8, 4> mScoutedSouvenirs;
+
     // List of 7 u8s for tracking which captures have been grabbed
     sead::SafeArray<u8, 7> collectedCaptures;
     sead::SafeArray<u8, 7> checkedCaptures;
 
+    // List of 7 u8s for tracking which captures have been grabbed
+    sead::SafeArray<u8, 126> mCollectedRegionals;
+
+    // List of 3 u8s for tracking which moon rocks have been collected
+    sead::SafeArray<u8, 3> mCollectedMoonRocks;
+
+    // List of 3 u8s for tracking which moon rocks have been scouted
+    sead::SafeArray<u8, 3> mScoutedMoonRocks;
+
     // Moon Text Replacement Handling
-    Shine* mRecentShine = nullptr;
+    int mRecentShineHintIndex = 0;
     sead::SafeArray<shineReplaceText, 100> shineTextReplacements;
-    sead::SafeArray<sead::FixedSafeString<40>, 100> mShineItemNames;
+    sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 100> mShineItemNames;
+    sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 100> mShineSlotNames;
 
     // Moon Color Replacement
     sead::SafeArray<s8, 1170> shineColors;
@@ -182,31 +241,33 @@ private:
     sead::SafeArray<shopReplaceText, 17> shopStickerTextReplacements;
     sead::SafeArray<shopReplaceText, 26> shopGiftTextReplacements;
     sead::SafeArray<shopReplaceText, 13> shopMoonTextReplacements;
-    sead::SafeArray<sead::WFixedSafeString<40>, 144> mGameNames;
-    sead::SafeArray<sead::WFixedSafeString<40>, 144> mSlotNames;
-    sead::SafeArray<sead::WFixedSafeString<40>, 144> mItemNames;
+    sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 144> mGameNames;
+    sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 144> mSlotNames;
+    sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 144> mItemNames;
+
+    // With only 9 slots for regional coin items that are updated upon entering a shop
+    // Add 100 to merge with shine slots and items
+    // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 72> mGameNames;
+    // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 72> mSlotNames;
+    // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 72> mItemNames;
+
     int numApGames = 0;
     int numApSlots = 0;
     int numApItems = 0;
 
     // Loading Zone Replacement
-    // 378 one for each StageId
+    // 239 one for each StageId
     // May need more for alternate loading zones in sub areas that don't use a unique
     // stage id like forks exit
     // Flag for if Entrance Randomization is active
     // stageConnections are indexed by stageId
-    bool isER = false;
     // Overworld connections
-    sead::SafeArray<stageConnection, 378> overworldStageConnections;
+    sead::SafeArray<stageConnection, 239> mOverworldStageConnections;
     // Sub area connections
-    sead::SafeArray<stageConnection, 378> subAreaStageConnections;
+    sead::SafeArray<stageConnection, 239> mSubAreaStageConnections;
 
-    // Esacape to last trasition or Odyssey
-    // Could just use preexisting
+    ChangeStageInfo* mLastERTransition = nullptr;
 
-    // Update Timers
-    unsigned short mUpdateCounterTimer = 0;
-    u8 mSoftlockTimer = 0;
-
-    ArchipelagoInfo* mInfo = nullptr;
+    int mCurWorldShineList = 0;
+    int mRelativeWorldCoinCollect = -1;
 };

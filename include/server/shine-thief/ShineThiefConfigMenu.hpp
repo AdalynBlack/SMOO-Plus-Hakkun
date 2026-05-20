@@ -20,6 +20,8 @@ public:
     void initMenu() override;
     void updateDataFromRollParts() override;
 
+    const bool hasRollParts() override { return true; };
+
 private:
     static constexpr int mItemCount = 4;
     sead::SafeArray<sead::WFixedSafeString<0x200>, mItemCount> mItems;

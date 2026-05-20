@@ -5,6 +5,7 @@
 
 #include "sead/prim/seadSafeString.h"
 
+#include "al/Library/Base/StringUtil.h"
 #include "al/Library/Layout/LayoutActionFunction.h"
 #include "al/Library/LiveActor/ActorAreaFunction.h"
 #include "al/Library/Message/MessageHolder.h"
@@ -14,15 +15,18 @@
 
 #include "game/Actors/GrowFlowerPot.h"
 #include "game/Demo/DemoStateHackFirst.h"
+#include "game/Layout/TalkMessage.h"
 #include "game/Scene/CapMessageMoonNotifier.h"
 #include "game/Sequence/ChangeStageInfo.h"
 #include "game/System/GameDataFile.h"
 #include "game/System/GameDataFunction.h"
 #include "game/System/GameDataHolder.h"
 #include "game/System/GameDataUtil.h"
+#include "game/System/GameProgressData.h"
 #include "game/Util/ItemUtil.h"
 #include "game/Util/StageLayoutFunction.h"
 
+#include "rs/util.hpp"
 #include "server/archipelago/ArchipelagoMode.hpp"
 #include "server/Client.hpp"
 #include "server/gamemode/GameModeManager.hpp"
@@ -42,7 +46,7 @@ static bool isGrabShine(GameDataHolderAccessor accessor, int hintIdx) {
 
 static HkTrampoline<bool, GameDataHolderAccessor, const ShineInfo*> isGrabShineByShineInfoHook =
     hk::hook::trampoline([](GameDataHolderAccessor accessor, const ShineInfo* shineInfo) -> bool {
-        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
             int i = 0;
             for (i = 0; i < 0x400; i++) {
                 GameDataFile::HintInfo* curHintInfo = &accessor.mData->getGameDataFile()->getHintList()[i];
@@ -63,22 +67,22 @@ static HkTrampoline<bool, GameDataHolderAccessor, const ShineInfo*> isGrabShineB
 
 static HkTrampoline<bool, GameDataHolderAccessor, int> isGrabShineByHintInfoIdxHook =
     hk::hook::trampoline([](GameDataHolderAccessor accessor, int hintIdx) -> bool {
-        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
             return isGrabShine(accessor, hintIdx);
         } else {
             return isGrabShineByHintInfoIdxHook.orig(accessor, hintIdx);
         }
     });
 
-static HkTrampoline<bool, GameDataHolderAccessor, int, int> isGrabShineByWorldIdHintIdxHook =
-    hk::hook::trampoline([](GameDataHolderAccessor accessor, int worldId, int hintIdx) -> bool {
-        // Examine if not performing check for moon rock scenario causes unintended behavior in game
-        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-            return isGrabShine(accessor, hintIdx);
-        } else {
-            return isGrabShineByWorldIdHintIdxHook.orig(accessor, worldId, hintIdx);
-        }
-    });
+// static HkTrampoline<bool, GameDataHolderAccessor, int, int> isGrabShineByWorldIdHintIdxHook =
+//     hk::hook::trampoline([](GameDataHolderAccessor accessor, int worldId, int hintIdx) -> bool {
+//         // Examine if not performing check for moon rock scenario causes unintended behavior in game
+//         if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+//             return isGrabShine(accessor, hintIdx);
+//         } else {
+//             return isGrabShineByWorldIdHintIdxHook.orig(accessor, worldId, hintIdx);
+//         }
+//     });
 
 // might be unneeded
 static HkTrampoline<bool, const Shine*> isGotShineRedirectHook = hk::hook::trampoline([](const Shine* curShine) -> bool {
@@ -89,6 +93,34 @@ static HkTrampoline<bool, const Shine*> isGotShineRedirectHook = hk::hook::tramp
         return isGotShineRedirectHook.orig(curShine);
     }
 });
+
+static bool shineListShineCountHook(GameDataHolderAccessor accessor, int worldId, int hintIdx) {
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        // Gets Shine Uid by index in hint list relative to worldId
+        int hintIdxByWorld = -1;
+        for (int i = 0; i < 0x400; i++) {
+            GameDataFile::HintInfo* curHintInfo = &accessor.mData->getGameDataFile()->getHintList()[i];
+            if (curHintInfo->worldId == worldId) {
+                hintIdxByWorld += 1;
+                if (hintIdxByWorld == hintIdx) {
+                    return GameModeManager::instance()->getMode<ArchipelagoMode>()->hasShine(curHintInfo->uniqueId);
+                }
+            }
+        }
+
+        // sead::FixedSafeString<64> errorStr = sead::FixedSafeString<64>();
+        // errorStr = "world ";
+        // errorStr.append(intToCstr(worldId));
+        // errorStr.append(", hint ");
+        // errorStr.append(intToCstr(hintIdx));
+        // errorStr.append(", unique ");
+        // errorStr.append(intToCstr(curHintInfo->uniqueId));
+        // Client::addMessage(errorStr.cstr());
+        Client::addMessage("Failed to find shine for list.");
+    }
+
+    return GameDataFunction::isGotShine(accessor, worldId, hintIdx);
+}
 
 // ===== Unlock Shine Num =====
 int getApUnlockShineNumByWorldId(int worldId) {
@@ -101,7 +133,7 @@ int getApUnlockShineNumByWorldId(int worldId) {
 
 static HkTrampoline<int, GameDataHolder*, bool*, int> getUnlockShineNumHook =
     hk::hook::trampoline([](GameDataHolder* thisPtr, bool* unkBool, int worldId) -> int {
-        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
             return getApUnlockShineNumByWorldId(worldId);
         }
         return getUnlockShineNumHook.orig(thisPtr, unkBool, worldId);
@@ -109,7 +141,7 @@ static HkTrampoline<int, GameDataHolder*, bool*, int> getUnlockShineNumHook =
 
 // static HkTrampoline<int, bool*, GameDataHolderAccessor> getUnlockShineNumByAccessorHook = hk::hook::trampoline([](bool* unkBool, GameDataHolderAccessor
 // accessor) -> int {
-//     if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+//     if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
 //         int worldId = accessor.mData->mPlayingFile->getCurrentWorldId();
 //         return getApUnlockShineNumByWorldId(worldId);
 //     }
@@ -117,7 +149,7 @@ static HkTrampoline<int, GameDataHolder*, bool*, int> getUnlockShineNumHook =
 // });
 
 // static HkTrampoline<int, GameDataFile*, bool*> getUnlockShineNumByGameDataFileHook = hk::hook::trampoline([](GameDataFile* file, bool* unkBool) -> int {
-//     if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+//     if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
 //         int worldId = file->getCurrentWorldId();
 //         return getApUnlockShineNumByWorldId(worldId);
 //     }
@@ -126,7 +158,7 @@ static HkTrampoline<int, GameDataHolder*, bool*, int> getUnlockShineNumHook =
 //
 // static HkTrampoline<int, bool*, GameDataHolder*, int> getUnlockShineNumByWorldIdHook = hk::hook::trampoline([](bool* unkBool, GameDataHolder* thisPtr, int
 // worldId) -> int {
-//     if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+//     if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
 //         return getApUnlockShineNumByWorldId(worldId);
 //     }
 //     return getUnlockShineNumByWorldIdHook.orig(unkBool, thisPtr, worldId);
@@ -148,21 +180,95 @@ static bool showHasUnlockShineNumCapMessage(al::IUseSceneObjHolder* sceneObjHold
     return false;
 }
 
+// ===== Regional Coins =====
+static bool isGotCoinCollectHook(GameDataFile* file, al::PlacementId const* placementId) {
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
+        al::StringTmp<128> placeIdString;
+        placementId->makeString(&placeIdString);
+        return archipelago->hasRegionalCoin(placeIdString.cstr());
+    } else {
+        return file->isGotCoinCollect(placementId);
+    }
+}
+
+// Gets the relative world Id for CoinCollect archive name and Picture Font for ER
+static int getCurrentWorldIdForCoinCollectHook(GameDataHolderAccessor accessor) {
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO) &&
+        GameModeManager::instance()->getMode<ArchipelagoMode>()->getRelativeWorldCoinCollect() > -1) {
+        ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
+        return archipelago->getRelativeWorldCoinCollect();
+    }
+    return GameDataFunction::getCurrentWorldId(accessor);
+}
+
+static int getCoinCollectCheckGotNumHook(GameDataHolderAccessor accessor) {
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO) &&
+        GameModeManager::instance()->getMode<ArchipelagoMode>()->getRelativeWorldCoinCollect() > -1) {
+        ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
+        return archipelago->getRelativeWorldCoinCollectCheckGotNum(accessor);
+    }
+    return GameDataFunction::getCoinCollectGotNum(accessor);
+}
+
+static int getCoinCollectNumMaxHook(GameDataHolderAccessor accessor) {
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO) &&
+        GameModeManager::instance()->getMode<ArchipelagoMode>()->getRelativeWorldCoinCollect() > -1) {
+        ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
+        return accessor.mData->getCoinCollectNumMax(archipelago->getRelativeWorldCoinCollect());
+    }
+    return GameDataFunction::getCoinCollectNumMax(accessor);
+}
+
+static HkTrampoline<int, GameDataHolderAccessor> getCoinCollectNumHook = hk::hook::trampoline([](GameDataHolderAccessor accessor) -> int {
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO) &&
+        GameModeManager::instance()->getMode<ArchipelagoMode>()->getRelativeWorldCoinCollect() > -1) {
+        return GameModeManager::instance()->getMode<ArchipelagoMode>()->getNumCoinCollect();
+    }
+
+    return getCoinCollectNumHook.orig(accessor);
+});
+
+static void useCoinCollectHook(GameDataHolderWriter writer, int amount) {
+    if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        GameDataFunction::useCoinCollect(writer, amount);
+    } else {
+        return;
+    }
+}
+
 // ===== Shop Items =====
-static HkTrampoline<void, GameDataFile*, ShopItem::ItemInfo*, bool> buyItemHook =
-    hk::hook::trampoline([](GameDataFile* file, ShopItem::ItemInfo* itemInfo, bool unkBool) -> void {
-        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-            GameModeManager::instance()->getMode<ArchipelagoMode>()->sendShopCheck(itemInfo);
-        } else {
-            // Send buy item packet here
-            buyItemHook.orig(file, itemInfo, unkBool);
-        }
-    });
+static void buyItemHook(GameDataFile* file, const ShopItem::ItemInfo* itemInfo, bool isPrepoSave) {
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        GameModeManager::instance()->getMode<ArchipelagoMode>()->sendShopCheck(itemInfo);
+    } else {
+        // Send buy item packet here
+        file->buyItem(itemInfo, isPrepoSave);
+    }
+}
+
+static void wearCapHook(GameDataHolderWriter writer, const char* itemName) {
+    if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        GameDataFunction::wearCap(writer, itemName);
+    } else {
+        return;
+    }
+}
+
+static void wearCostumeHook(GameDataHolderWriter writer, const char* itemName) {
+    if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        GameDataFunction::wearCostume(writer, itemName);
+    } else {
+        return;
+    }
+}
 
 // ===== Stage Changing =====
 static void onGrandShineStageChange(GameDataHolderWriter writer, ChangeStageInfo const* stageInfo) {
-    if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-        GameModeManager::instance()->getMode<ArchipelagoMode>()->sendStage(writer, stageInfo);
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        GameModeManager::instance()->getMode<ArchipelagoMode>()->setScenario(stageInfo->mChangeStageName.cstr(), stageInfo->mScenarioNo);
+
+        // GameModeManager::instance()->getMode<ArchipelagoMode>()->sendStage(writer, stageInfo);
     } else {
         GameDataFunction::tryChangeNextStage(writer, stageInfo);
     }
@@ -172,23 +278,33 @@ static void changeNextStage(GameDataFile* file, const ChangeStageInfo* stageInfo
     if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
         file->changeNextStage(stageInfo, param2);
     } else {
+        ArchipelagoMode* apMode = GameModeManager::instance()->getMode<ArchipelagoMode>();
+        ChangeStageInfo* erInfo = apMode->handleER(stageInfo);
         // Client::setMessage(1, stageInfo->mChangeStageId.cstr());
         //  Add Wooded shop moon warp
 
         if (!(al::isEqualString(stageInfo->mChangeStageId.cstr(), "obj846") || al::isEqualString(stageInfo->mChangeStageId.cstr(), "obj1084"))) {
             if (isPartOf(stageInfo->mChangeStageName.cstr(), "WorldHomeStage")) {
-                if (GameModeManager::instance()->getMode<ArchipelagoMode>()->setScenario(stageInfo->mChangeStageName.cstr(), stageInfo->mScenarioNo)) {
+                if (apMode->setScenario(stageInfo->mChangeStageName.cstr(), stageInfo->mScenarioNo)) {
                     // Client::setMessage(2, "attempting send to correct scenario");
-                    GameModeManager::instance()->getMode<ArchipelagoMode>()->sendCorrectScenario(stageInfo);
+                    apMode->sendCorrectScenario(stageInfo);
 
                 } else {
                     // Client::setMessage(2, "setScenario false");
-                    file->changeNextStage(stageInfo, param2);
+                    if (erInfo) {
+                        file->changeNextStage(erInfo, param2);
+                    } else {
+                        file->changeNextStage(stageInfo, param2);
+                    }
                 }
             } else {
                 // Non world transitions
                 // Client::setMessage(2, "non world transition");
-                file->changeNextStage(stageInfo, param2);
+                if (erInfo) {
+                    file->changeNextStage(erInfo, param2);
+                } else {
+                    file->changeNextStage(stageInfo, param2);
+                }
             }
         } else {
             // Catch cap and cascade shop moons
@@ -198,10 +314,15 @@ static void changeNextStage(GameDataFile* file, const ChangeStageInfo* stageInfo
     }
 }
 
+// static bool tryFindLinkDestStageInfoOverride(GameDataHolder* holder, const char** destStageName, const char** destLabel, const char* srcStageName,
+//                                              const char* srcLabel) {
+//     sead::S return holder->tryFindLinkDestStageInfo(destStageName, destLabel, srcStageName, srcLabel);
+// }
+
 // includes paintings
 // static HkTrampoline<void, GameDataFile*, const ChangeStageInfo*, int> changeNextStageHook =
 //     hk::hook::trampoline([](GameDataFile* file, const ChangeStageInfo* stageInfo, int param2) -> void {
-//         if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+//         if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
 //             changeNextStageHook.orig(file, stageInfo, param2);
 //         } else {
 //             // Client::setMessage(1, stageInfo->mChangeStageId.cstr());
@@ -232,7 +353,7 @@ static void changeNextStage(GameDataFile* file, const ChangeStageInfo* stageInfo
 
 // ===== Shine Data Replacement =====
 static bool isReplaceShineLabel(al::LayoutActor* layout, char const* element, char const* label, char const* param4) {
-    if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+    if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
         return rs::trySetPaneStageMessageIfExist(layout, element, label, param4);
     }
 
@@ -243,10 +364,26 @@ static void setShineLabel(al::IUseLayout* layout, const char* elementLabel) {
     al::setPaneStringFormat(layout, elementLabel, GameModeManager::instance()->getMode<ArchipelagoMode>()->getShineReplacementText());
 }
 
+static int isPowerStarHook(Shine* shine, char* stageName) {
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        int storedColor = GameModeManager::instance()->getMode<ArchipelagoMode>()->getShineColor(shine);
+        if (storedColor - 64 > -1)
+            return 99;
+    }
+    return rs::getStageShineAnimFrame((al::LiveActor*)shine, stageName);
+}
+
+static bool isWorldPeachHook(GameDataHolderAccessor accessor) {
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO))
+        return false;
+
+    return GameDataFunction::isWorldPeach(accessor);
+}
+
 static void setShineColor(Shine* thisPtr, char* stageName, int color, bool isSetMtpColor) {
     // Get color here using shine unique id
     // Client::setMessage(1, "Set custom shine color");
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
         int storedColor = GameModeManager::instance()->getMode<ArchipelagoMode>()->getShineColor(thisPtr);
         rs::setStageShineAnimFrame((al::LiveActor*)thisPtr, stageName, storedColor, isSetMtpColor);
     } else {
@@ -257,7 +394,7 @@ static void setShineColor(Shine* thisPtr, char* stageName, int color, bool isSet
 static void setShineModelColor(Shine* thisPtr, char* stageName, int color, bool isSetMtpColor) {
     // Get color here using shine unique id
     // Client::setMessage(1, "Set custom other shine color");
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
         int storedColor = GameModeManager::instance()->getMode<ArchipelagoMode>()->getShineColor(thisPtr);
         rs::setStageShineAnimFrame(thisPtr->mModelShine, stageName, storedColor, isSetMtpColor);
     } else {
@@ -268,7 +405,7 @@ static void setShineModelColor(Shine* thisPtr, char* stageName, int color, bool 
 // ===== Shop Data Replacement =====
 static const char16_t* getShopItemMessage(al::IUseMessageSystem const* messageSystem, char const* fileName, char const* key) {
     GameModeManager* manager = GameModeManager::instance();
-    if (manager->isMode(GameMode::ARCHIPELAGO)) {
+    if (manager->isModeAndActive(GameMode::ARCHIPELAGO)) {
         const char16_t* msg = manager->getMode<ArchipelagoMode>()->getShopReplacementText(fileName, key);
         sead::WFixedSafeString<200> confirm;
         confirm = u"";
@@ -283,7 +420,7 @@ static const char16_t* getShopItemMessage(al::IUseMessageSystem const* messageSy
 
 static bool isBuyItems(ShopItem::ItemInfo* itemInfo) {
     // Add a collected outfits, gifts, stickers based implementation similar to shinechecks
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
         return false;
     } else {
         return Client::get()->getHolder()->getGameDataFile()->isBuyItem(itemInfo);
@@ -294,7 +431,7 @@ static bool isBuyItems(ShopItem::ItemInfo* itemInfo) {
 // isExistInHackDictionary for capture tracking
 static void onAddHack(GameDataHolderWriter writer, const char* hackName) {
     GameModeManager* manager = GameModeManager::instance();
-    if (manager->isMode(GameMode::ARCHIPELAGO) && manager->getMode<ArchipelagoMode>()->getCapturesFlag()) {
+    if (manager->isModeAndActive(GameMode::ARCHIPELAGO) && manager->getMode<ArchipelagoMode>()->getCapturesFlag()) {
         // Client::setMessage(2, hackName);
         manager->getMode<ArchipelagoMode>()->sendCaptureCheck(hackName);
         manager->getMode<ArchipelagoMode>()->setIsRecordCapture(true);
@@ -309,50 +446,50 @@ static void canEndHack(al::LiveActor* actor) {
     }
 }
 
+// ===== Shine List / Collections List =====
+static void setShineCounterAndDenominatorHook(al::LayoutActor* shineList, int numerator, int denominator) {
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        numerator = GameModeManager::instance()->getMode<ArchipelagoMode>()->getNumGotShines();
+        // setShineCounterAndDenominatorHook.orig();
+        rs::setCounterAndDenominator(shineList, numerator, denominator);
+
+    } else {
+        // setShineCounterAndDenominatorHook.orig();
+        rs::setCounterAndDenominator(shineList, numerator, denominator);
+    }
+}
+
+static int getWorldIdForShineListHook(GameProgressData* gameProgressData, int worldId) {
+    if (GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        int shineListWorldId = gameProgressData->getWorldIdForShineList(worldId);
+        GameModeManager::instance()->getMode<ArchipelagoMode>()->setCurWorldShineList(shineListWorldId);
+        return shineListWorldId;
+
+    } else {
+        return gameProgressData->getWorldIdForShineList(worldId);
+    }
+}
+
 // ===== QOL Changes =====
 bool growOnPlant(GrowFlowerPot* thisPtr) {
-    rs::setGrowFlowerTime(thisPtr, thisPtr->mPlacementId, 3600000);
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO))
+        // rs::addGrowFlowerGrowLevel(thisPtr, thisPtr->mPlacementId, 255);
+        thisPtr->tryMaxGrowLevel();
     return al::isActionEnd(thisPtr);
 }
 
 // ===== Demo Hooks =====
 // _ZN16HakoniwaSequence15exeBootLoadDataEv = 0x50F29C - 0x50F304
-// void onNewGameDemoStart(char* name, bool unkBool) {
-//    for (int i = 0; i < 18; i++) {
-//        Client::setScenario(i, 1);
-//    }
-//
-//    for (int i = 0; i < 25; i++) {
-//        Client::setShineChecks(i, 0);
-//    }
-//
-//    for (int i = 0; i < 12; i++) {
-//        Client::setOutfitChecks(i, 0);
-//    }
-//
-//    for (int i = 0; i < 4; i++) {
-//        Client::setStickerChecks(i, 0);
-//    }
-//
-//    for (int i = 0; i < 5; i++) {
-//        Client::setSouvenirChecks(i, 0);
-//    }
-//
-//    for (int i = 0; i < 8; i++) {
-//        Client::setCaptureChecks(i, 0);
-//    }
-//
-//    Client::setCheckIndex(-1);
-//
-//    // al::initActorWithArchiveName(thisPtr, info, str, name);
-//    al::createSceneHeap(name, unkBool);
-//    return;
-//}
+void onNewGameDemoStart(char* name, bool unkBool) {
+    GameModeManager::instance()->getMode<ArchipelagoMode>()->setConnectInitFlag(true);
+    al::createSceneHeap(name, unkBool);
+    return;
+}
 
 // First time entering lost in demo from cloud
 static void onUnlockLost(GameDataHolderWriter writer, int worldIndex) {
     // Send Beat Bowser in Cloud location
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
         Client::sendCheckPacket(2500, CheckType::Moon);
     }
 
@@ -361,8 +498,9 @@ static void onUnlockLost(GameDataHolderWriter writer, int worldIndex) {
     return;
 }
 
+// On credits scene initialization
 static void onCreditsStart(al::Scene* thisPtr, const al::SceneInitInfo info) {
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
         Client::sendCheckPacket(2499, CheckType::Moon);
     }
 
@@ -370,6 +508,130 @@ static void onCreditsStart(al::Scene* thisPtr, const al::SceneInitInfo info) {
     return;
 }
 
+//
 bool skipHackCutscene(DemoStateHackFirst* thisPtr, IUsePlayerHack** param_1, al::SensorMsg* param_2, al::HitSensor* param_3, al::HitSensor* param_4) {
-    return false;
+    return GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO);
 }
+
+int calcWorldNumForShineListHook(GameProgressData* gpd) {
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        return 17;
+    }
+    return gpd->calcWorldNumForShineList();
+}
+
+static void updateListHook(GameProgressData* gameProgressData) {
+    gameProgressData->updateList();
+    if (GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        for (int i = 0; i < 17; i++) {
+            gameProgressData->mWorldIdForShineList[i] = i;
+        }
+
+        for (int i = 0; i < 17; i++) {
+            gameProgressData->mWorldIdForWorldMap[i] = i;
+        }
+
+        gameProgressData->mUnlockWorldStatusFirstBranch = GameProgressData::FirstBranch::Lake;
+        gameProgressData->mUnlockWorldStatusSecondBranch = GameProgressData::SecondBranch::Snow;
+
+        if (gameProgressData->mUnlockWorldNum == 4) {
+            gameProgressData->mIsUnlockWorld[GameDataFunction::getWorldIndexForest()] = true;
+            gameProgressData->mIsUnlockWorld[GameDataFunction::getWorldIndexLake()] = false;
+        }
+
+        if (gameProgressData->mUnlockWorldNum == 9) {
+            gameProgressData->mIsUnlockWorld[GameDataFunction::getWorldIndexSea()] = true;
+            gameProgressData->mIsUnlockWorld[GameDataFunction::getWorldIndexSnow()] = false;
+        }
+
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexWaterfall()] = GameDataFunction::getWorldIndexSky();
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexSand()] = GameDataFunction::getWorldIndexCity();
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexForest()] = GameDataFunction::getWorldIndexLava();
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexLake()] = GameDataFunction::getWorldIndexSand();
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexCity()] = GameDataFunction::getWorldIndexForest();
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexSea()] = GameDataFunction::getWorldIndexLake();
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexSnow()] = GameDataFunction::getWorldIndexWaterfall();
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexLava()] = GameDataFunction::getWorldIndexPeach();
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexSky()] = GameDataFunction::getWorldIndexSea();
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexPeach()] = GameDataFunction::getWorldIndexSnow();
+
+        // 0 = ??? assume Bowser
+        // 1 =
+
+        // for (int i = 0; i < 17; i++) {
+        //     sead::FixedSafeString<128> paintingId = sead::FixedSafeString<128>();
+        //     paintingId = "World Id: ";
+        //     paintingId.append(intToCstr(i));
+        //     paintingId.append(" Painting Id: ");
+        //     paintingId.append(intToCstr(gameProgressData->mWorldIdForWorldWarpHole[i]));
+        //     Client::addMessage(paintingId.cstr());
+        // }
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexWaterfall()] = 1;
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexSand()] = 1;
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexForest()] = 1;
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexLake()] = 1;
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexCity()] = 1;
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexSea()] = 1;
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexSnow()] = 1;
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexLava()] = 1;
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexSky()] = 1;
+        // gameProgressData->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexPeach()] = 1;
+    }
+}
+
+// static HkTrampoline<bool, GameDataHolderAccessor, int> isUnlockedWorldHook = hk::hook::trampoline([](GameDataHolderAccessor accessor, int worldId) -> bool {
+//     if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+//         if (worldId == (int)GameDataFunction::getWorldIndexHat() || worldId == (int)GameDataFunction::getWorldIndexWaterfall()) {
+//             return true;
+//         }
+//         int curWorldId = GameDataFunction::getCurrentWorldId(accessor);
+//         if (curWorldId >= 0 && worldId == curWorldId) {
+//             return true;
+//         }
+//     }
+//     return isUnlockedWorldHook.orig(accessor, worldId);
+// });
+
+static bool isUnlockWorldForHomeHook(GameDataHolderAccessor accessor, int worldId) {
+    if (GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        return true;
+    }
+
+    return GameDataFunction::isUnlockedWorld(accessor, worldId);
+}
+
+static bool isExistHomeHook(GameDataHolderAccessor accessor) {
+    if (GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        return true;
+    }
+
+    return GameDataFunction::isExistHome(accessor);
+}
+
+// static int exeDemoWorldSelectTalkMessageHook(TalkMessage* worldSelection) {
+//     if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+//         GameDataHolderAccessor accessor(((al::LayoutActor*)worldSelection)->getSceneObjHolder());
+//         int worldId = GameDataFunction::getCurrentWorldId(accessor);
+//         if (worldId == GameDataFunction::getWorldIndexSand()) {
+//             worldSelection->mCommonSelectParts->exeDecide();
+//             return GameDataFunction::getWorldIndexLake();
+//         }
+//     }
+
+//     return worldSelection->getSelectedChoiceIndex();
+// }
+
+// static void addPayShineHook(GameDataHolderWriter writer, int count) {
+//     GameDataFunction::addPayShine(writer, count);
+//     if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+//         int worldId = GameDataFunction::getCurrentWorldId(GameDataHolderAccessor(writer.mData));
+//         if (worldId == GameDataFunction::getWorldIndexSand()) {
+//             if (GameDataFunction::getPayShineNum(GameDataHolderAccessor(writer.mData)) >=
+//                 GameModeManager::instance()->getMode<ArchipelagoMode>()->getWorldUnlockCount(worldId)) {
+//                 GameProgressData* gameProgressData = writer.mData->getGameDataFile()->getGameProgressData();
+//                 gameProgressData->mIsUnlockWorld[GameDataFunction::getWorldIndexForest()] = true;
+//                 gameProgressData->mUnlockWorldNum += 1;  // = 4
+//             }
+//         }
+//     }
+// }

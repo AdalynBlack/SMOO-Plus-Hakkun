@@ -48,7 +48,8 @@
 
 static HkReplace<bool, al::IUseSceneObjHolder*> comboBtnHook = hk::hook::replace([](al::IUseSceneObjHolder* holder) -> bool {
     // only switch to combo if freezetag or shinethief is active
-    if (GameModeManager::instance()->isModeAndActive(GameMode::FREEZETAG) || GameModeManager::instance()->isModeAndActive(GameMode::SHINETHIEF))
+    if (GameModeManager::instance()->isModeAndActive(GameMode::FREEZETAG) || GameModeManager::instance()->isModeAndActive(GameMode::SHINETHIEF) ||
+        GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO))
         return false;
 
     // only if the gamemode wants it
@@ -72,8 +73,13 @@ static HkTrampoline<void, GameConfigData*, al::ByamlWriter*> saveWriteHook = hk:
     const bool costumeDoorsUnlocked = StageSceneStateModConfig::isCostumeDoorsUnlocked();
     const bool lowLatency = StageSceneStateModConfig::isLowLatencyEnabled();
     const bool music = !Client::isMusicDisabled();
+    const int defaultMode = Client::getDefaultGameMode();
 
     const char* apClientIP = Client::getApClientIP();
+    const char* archipelagoHost = Client::getArchipelagoHost();
+    int archipelagoPort = Client::getArchipelagoPort();
+    const char* archipelagoSlot = Client::getArchipelagoSlot();
+    const char* archipelagoPassword = Client::getArchipelagoPassword();
 
     writer->pushHash("SMOOData");
     if (serverIP) {
@@ -96,14 +102,37 @@ static HkTrampoline<void, GameConfigData*, al::ByamlWriter*> saveWriteHook = hk:
     writer->addBool("CostumeDoorsUnlocked", costumeDoorsUnlocked);
     writer->addBool("LowLatency", lowLatency);
     writer->addBool("Music", music);
+    writer->addInt("DefaultGameMode", defaultMode);
     writer->pop();
 
     writer->pushHash("ArchipelagoData");
-    if (serverIP) {
+    if (apClientIP) {
         writer->addString("ApClientIP", apClientIP);
     } else {
         writer->addString("ApClientIP", "127.0.0.1");
     }
+
+    if (archipelagoHost) {
+        writer->addString("ArchipelagoHost", archipelagoHost);
+    } else {
+        writer->addString("ArchipelagoHost", "archipelago.gg");
+    }
+
+    writer->addInt("ArchipelagoPort", archipelagoPort);
+
+    if (archipelagoSlot) {
+        writer->addString("ArchipelagoSlot", archipelagoSlot);
+    } else {
+        writer->addString("ArchipelagoSlot", "");
+    }
+
+    if (archipelagoPassword) {
+        writer->addString("ArchipelagoPassword", archipelagoPassword);
+    } else {
+        writer->addString("ArchipelagoPassword", "");
+    }
+
+    writer->pop();
 });
 
 static HkTrampoline<void, GameConfigData*, const al::ByamlIter&> saveReadHook =
@@ -120,8 +149,13 @@ static HkTrampoline<void, GameConfigData*, const al::ByamlIter&> saveReadHook =
         bool costumeDoorsUnlocked = true;
         bool lowLatency = false;
         bool music = true;
+        int defaultMode = 0;
 
         const char* apClientIP = "";
+        const char* archipelagoHost = "";
+        int archipelagoPort = 0;
+        const char* archipelagoSlot = "";
+        const char* archipelagoPassword = "";
 
         al::ByamlIter iterIntern;
         al::tryGetByamlIterByKey(&iterIntern, iter, "SMOOData");
@@ -161,11 +195,30 @@ static HkTrampoline<void, GameConfigData*, const al::ByamlIter&> saveReadHook =
                 Client::toggleMusicDisabled();
             }
         }
+        if (al::tryGetByamlS32(&defaultMode, iterIntern, "DefaultGameMode")) {
+            Client::setDefaultGameMode(defaultMode);
+        }
 
         al::tryGetByamlIterByKey(&iterIntern, iter, "ArchipelagoData");
 
         if (al::tryGetByamlString(&apClientIP, iterIntern, "ApClientIP")) {
             Client::setApClientIP(apClientIP);
+        }
+
+        if (al::tryGetByamlString(&archipelagoHost, iterIntern, "ArchipelagoHost")) {
+            Client::setArchipelagoHost(archipelagoHost);
+        }
+
+        if (al::tryGetByamlS32(&archipelagoPort, iterIntern, "ArchipelagoPort")) {
+            Client::setArchipelagoPort(archipelagoPort);
+        }
+
+        if (al::tryGetByamlString(&archipelagoSlot, iterIntern, "ArchipelagoSlot")) {
+            Client::setArchipelagoSlot(archipelagoSlot);
+        }
+
+        if (al::tryGetByamlString(&archipelagoPassword, iterIntern, "ArchipelagoPassword")) {
+            Client::setArchipelagoPassword(archipelagoPassword);
         }
     });
 

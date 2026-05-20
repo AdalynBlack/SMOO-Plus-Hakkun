@@ -14,9 +14,9 @@ void ArchipelagoHintArrow::initAfterPlacement(void) {
 }
 
 void ArchipelagoHintArrow::setupMaterials() {
-    al::showMaterial(this, "BodyRedMT00");
-    al::hideMaterial(this, "BodyYellowMT00");
-    al::hideMaterial(this, "BodyBlueMT00");
+    al::hideMaterial(this, "BodyRedMT00");
+    al::showMaterial(this, "BodyYellowMT00");
+    al::showMaterial(this, "BodyBlueMT00");
 }
 
 bool ArchipelagoHintArrow::shouldBeVisible() {
@@ -24,5 +24,7 @@ bool ArchipelagoHintArrow::shouldBeVisible() {
         return false;
 
     bool isInArchipelagoMode = GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO);
-    return isInArchipelagoMode;
+    bool isTargetAlive = isInArchipelagoMode && mInfo->mIsHintTargetValid;
+    return isTargetAlive;
+    // return false;
 }

@@ -140,7 +140,7 @@ bool StageSceneStateModConfig::currentMenuHasRollParts() const {
     if (mCurrentMenu == menuList[MENU_GAMEPLAY])
         return true;
     if (mGamemodeConfigMenu && mCurrentMenu == mGamemodeConfigMenu->mMenu)
-        return true;
+        return mGamemodeConfigMenu->hasRollParts();
     if (mCurrentMenu == menuList[MENU_SPEEDRUN_CONFIG]) {
         // Only the first item (SPEEDRUN_NONSTOP) is a check; item at index 2 is roll
         // Guard: only allow roll input when the selected row actually is a roll part
@@ -299,7 +299,7 @@ void StageSceneStateModConfig::exeNetworkSettings() {
             al::setNerve(this, &NrvStageSceneStateModConfig.OpenKeyboardPort);
             break;
         case NETW_RECONNECT:
-            Client::restartConnection();
+            Client::instance()->startReconnectThread();
             updateNetworkSettingsOptions();
             activateInput();
             break;
@@ -823,7 +823,7 @@ void StageSceneStateModConfig::kill() {
             Client::setConnectStatusMsg(u"Connecting to Server...");
 
         if (Client::get()->mIsAllowReconnect)
-            Client::restartConnection();
+            Client::instance()->startReconnectThread();
         Client::showUIMessage((Client::get()->mIsAllowReconnect || GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) ?
                                   u"Reconnecting..." :
                                   u"Server changed. Please restart the game.");

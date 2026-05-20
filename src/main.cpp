@@ -138,6 +138,11 @@ HkTrampoline<void, GameSystem*> drawMainHookHk = hk::hook::trampoline([](GameSys
     imgui::updateImGuiInput();
 
     ImGui::NewFrame();
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_None);
+    } else {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
+    }
     drawMain(gameSystem->mSequence);
     StageWarper::ShowSearchWindow();
     ImGui::Render();
@@ -167,6 +172,14 @@ HkTrampoline<void, GameDataHolderWriter, ShineInfo*> sendShinePacketHook = hk::h
             GameDataFile::HintInfo* curInfo = &writer->getGameDataFile()->getHintList()[x];
             if (info->mStageName == curInfo->stageName && info->mObjId == curInfo->objId) {
                 GameModeManager::instance()->getMode<ArchipelagoMode>()->sendMoonCheck(curInfo->uniqueId);
+                GameModeManager::instance()->getMode<ArchipelagoMode>()->setRecentShineHintIndex(curInfo->hintIdx);
+                int hintArtUids[] = {1086, 1096, 1094, 1089, 1088, 1087, 1095, 1090, 1091, 1165, 1152,
+                                     1132, 1128, 1124, 1126, 1130, 1129, 1127, 1123, 1125, 1131};
+                for (int i = 0; i < 21; i++) {
+                    if (hintArtUids[i] == curInfo->uniqueId) {
+                        GameModeManager::instance()->getMode<ArchipelagoMode>()->setRecentShineHintIndex(hintArtUids[i]);
+                    }
+                }
             }
         }
     }
@@ -188,8 +201,12 @@ HkTrampoline<void, GameDataFile*, al::PlacementId*> sendCoinCollectCollectPacket
     hk::hook::trampoline([](GameDataFile* file, al::PlacementId* placeID) -> void {
         al::StringTmp<128> placeIDString;
         placeID->makeString(&placeIDString);
-        Client::sendCoinCollectCollectPacket(placeIDString.cstr(), file->getCurrentWorldIdNoDevelop(), file->getStageNameCurrent());
-        sendCoinCollectCollectPacketHook.orig(file, placeID);
+        if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+            Client::sendCoinCollectCollectPacket(placeIDString.cstr(), file->getCurrentWorldIdNoDevelop(), file->getStageNameCurrent());
+            sendCoinCollectCollectPacketHook.orig(file, placeID);
+        } else {
+            GameModeManager::instance()->getMode<ArchipelagoMode>()->sendRegionalCoinCheck(placeIDString.cstr(), file->getStageNameCurrent());
+        }
     });
 
 HkTrampoline<void, HakoniwaSequence*, al::SequenceInitInfo*> hakoniwaSequenceInitHook =
@@ -351,7 +368,7 @@ HkTrampoline<void, HakoniwaSequence*> hakoniwaSequenceHook = hk::hook::trampolin
             }
         }
     } else if (al::isPadHoldL(-1)) {
-        if (al::isPadTriggerLeft(-1) && !StageSceneStateModConfig::isSpeedrunModeEnabled()) {
+        if (al::isPadTriggerLeft(-1) && !StageSceneStateModConfig::isSpeedrunModeEnabled() && !GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
             GameModeManager::instance()->toggleActive();
         }
     }
@@ -567,6 +584,12 @@ void drawMain(al::Sequence* curSequence) {
             chatInput[0] = '\0';  // Clear the input
         }
         ImGui::End();
+    }
+
+    if (gmm->isMode(GameMode::ARCHIPELAGO) && !debugMode) {
+        if (gmm->getMode<ArchipelagoMode>()) {
+            gmm->getMode<ArchipelagoMode>()->infoMenu();
+        }
     }
 
     // ===== NON-DEBUG MODE EXIT =====
@@ -950,29 +973,63 @@ extern "C" void hkMain() {
     hk::gfx::DebugRenderer::instance()->installHooks();
 
     // Archipelago
-    hk::hook::writeBranchLinkAtMainOffset(0x50FED4, onUnlockLost);      // Beat Bowser in Cloud Check
-    hk::hook::writeBranchLinkAtMainOffset(0x4C54A4, onCreditsStart);    // Beat the Game Check
-    hk::hook::writeBranchLinkAtMainOffset(0x54C3A0, isBuyItems);        // Shop bought items
-    hk::hook::writeBranchLinkAtMainOffset(0x4C54A4, skipHackCutscene);  // Skip frog cutscene
-    hk::hook::writeBranchAtMainOffset(0x56CC70, canEndHack);            // Fix uncapture crash
+    hk::hook::writeBranchLinkAtMainOffset(0x512AE8, onNewGameDemoStart);  // Intro demo start
+    hk::hook::writeBranchLinkAtMainOffset(0x50FED4, onUnlockLost);        // Beat Bowser in Cloud Check
+    hk::hook::writeBranchLinkAtMainOffset(0x4C54A4, onCreditsStart);      // Beat the Game Check
+    hk::hook::writeBranchLinkAtMainOffset(0x54C3A0, isBuyItems);          // Shop bought items
+    hk::hook::writeBranchLinkAtMainOffset(0x38C408, skipHackCutscene);    // Skip frog cutscene
+    hk::hook::writeBranchAtMainOffset(0x56CC70, canEndHack);              // Fix uncapture crash
 
-    hk::hook::writeBranchLinkAtMainOffset(0x4496AC, onAddHack);              // Capturesanity checks
-    hk::hook::writeBranchLinkAtMainOffset(0x2089C4, getShopItemMessage);     // Shop Text Replacement
-    hk::hook::writeBranchLinkAtMainOffset(0x208A44, getShopItemMessage);     // Shop Text Replacement
-    hk::hook::a64::assemble<"MOV W8, W28">().installAtMainOffset(0x534C58);  // Lock painting order
-    hk::hook::a64::assemble<"MOV W8, W26">().installAtMainOffset(0x534C70);  // as if lake and snow
-    hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534C80);  // are always branch
-    hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534C9C);  // selections
-    hk::hook::a64::assemble<"MOV X0, #17">().installAtMainOffset(0x52B154);  // Always unlock whole moon list
+    hk::hook::writeBranchLinkAtMainOffset(0x4496AC, onAddHack);           // Capturesanity checks
+    hk::hook::writeBranchLinkAtMainOffset(0x2089C4, getShopItemMessage);  // Shop Text Replacement
+    hk::hook::writeBranchLinkAtMainOffset(0x208A44, getShopItemMessage);  // Shop Text Replacement
+    // hk::hook::a64::assemble<"MOV W8, W28">().installAtMainOffset(0x534C58);  // Lock painting order
+    // hk::hook::a64::assemble<"MOV W8, W26">().installAtMainOffset(0x534C70);  // as if lake and snow
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534C80);  // are always branch
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534C9C);  // selections
+
+    // Eventually replace this with updateListHook
+    // UpdateListHook could also be used for world order rando and painting order rando
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x534858);  // Lock painting order
+    // hk::hook::a64::assemble<"MOV W8, 0x1">().installAtMainOffset(0x534870);  // as if lake and snow
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x534B0C);  // are always branch
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x534b24);  // selections
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x5349E0);  // Always unlock whole moon list
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x5349F8);
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x534C50);
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x534C68);
+
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534888);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x5348b0);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534b3c);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534b5c);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534a10);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534a38);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534c80);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534c9c);
+
+    hk::hook::writeBranchLinkAtMainOffset(0x52B154, calcWorldNumForShineListHook);  // Always unlock whole moon list
+    // getWorldIdForShineListHook.installAtSym<"_ZNK16GameProgressData22getWorldIdForShineListEi">();  // shine list // Also Crashes
+    hk::hook::writeBranchLinkAtMainOffset(0x52b118, getWorldIdForShineListHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x5355c8, updateListHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x5354d4, updateListHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x535230, updateListHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x535168, updateListHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x502ef4, exeDemoWorldSelectTalkMessageHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x30e1a8, addPayShineHook);
+
+    // hk::hook::writeBranchLinkAtMainOffset(0x534740, updateListHook); // Causes Crash on boot
 
     // Don't auto equip cutscene awarded outfits
     // Transition to Branch Link to prevent interfering with base game when AP disabled
-    hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x4DD16C);
-    hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x4DD0AC);
-    hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x4DD0E8);
-    hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x310FE4);
-    hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x311440);
-    hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x311464);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DD16C, wearCapHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DD0AC, wearCostumeHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DD0E8, wearCapHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x310FE4, wearCapHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x311440, wearCostumeHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x311464, wearCapHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x319EE4, wearCostumeHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x3190F4, wearCapHook);
 
     // Moon Data Replacement
     // Text Label
@@ -990,18 +1047,63 @@ extern "C" void hkMain() {
     hk::hook::a64::assemble<"MOV X0, X19">().installAtMainOffset(0x1CDE14);
     hk::hook::writeBranchLinkAtMainOffset(0x1CDD3C, setShineModelColor);
     hk::hook::writeBranchLinkAtMainOffset(0x1CDE24, setShineModelColor);
+    hk::hook::writeBranchLinkAtMainOffset(0x1CD94C, isPowerStarHook);   // Make Moons into Stars
+    hk::hook::writeBranchLinkAtMainOffset(0x1CDB94, isWorldPeachHook);  // Overwrite default Star behavior
 
-    hk::hook::writeBranchLinkAtMainOffset(0x1D2F08, onGrandShineStageChange);  // Fixes multi moon soft lock
+    hk::hook::writeBranchLinkAtMainOffset(0x1D2F08, onGrandShineStageChange);  // Fixes multi moon soft lock exccept going to Odysseyless Cap
     hk::hook::writeBranchLinkAtMainOffset(0x52F71C, changeNextStage);          // Scenario Tracking
     hk::hook::writeBranchLinkAtMainOffset(0x51DA40, changeNextStage);          // Scenario updating via Odyssey
+    // hk::hook::writeBranchLinkAtMainOffset(0x51d20c, tryFindLinkDestStageInfoOverride);  // ER Stuff
+
+    // Always active Odyssey
+    // isUnlockedWorldHook.installAtSym<"_ZN16GameDataFunction15isUnlockedWorldE22GameDataHolderAccessori">();
+    // isExistHomeHook.installAtSym<"_ZN16GameDataFunction11isExistHomeE22GameDataHolderAccessor">();
+    // hk::hook::trampoline([]() -> bool { return true; }).installAtSym<"_ZN16GameDataFunction11isExistHomeE22GameDataHolderAccessor">();
+    hk::hook::writeBranchLinkAtMainOffset(0x309904, isUnlockWorldForHomeHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x30991c, isUnlockWorldForHomeHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x1f365c, isExistHomeHook);
 
     // Grab Shine replace
-    // isGrabShineByShineInfoHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessorPK9ShineInfo">();
+    isGrabShineByShineInfoHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessorPK9ShineInfo">();
     isGrabShineByHintInfoIdxHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessori">();
-    isGrabShineByWorldIdHintIdxHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessorii">();
+    // isGrabShineByWorldIdHintIdxHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessorii">();
+    hk::hook::writeBranchLinkAtMainOffset(0x206E00, shineListShineCountHook);  // Shine List
+    // setShineCounterAndDenominatorHook.installAtSym<"_ZN2rs24setCounterAndDenominatorEPN2al11LayoutActorEii">();
+    hk::hook::writeBranchLinkAtMainOffset(0x2045d0, setShineCounterAndDenominatorHook);  // Shine List
 
     getUnlockShineNumHook.installAtSym<"_ZNK14GameDataHolder18findUnlockShineNumEPbi">();  // Change unlock requirements
-    buyItemHook.installAtSym<"_ZN12GameDataFile7buyItemEPKN8ShopItem8ItemInfoEb">();       // Item Checks
+
+    // Item Checks
+    hk::hook::writeBranchLinkAtMainOffset(0x54CB9C, buyItemHook);  // Caps
+    hk::hook::writeBranchLinkAtMainOffset(0x54C604, buyItemHook);  // Clothes
+    hk::hook::writeBranchLinkAtMainOffset(0x54C3EC, buyItemHook);  // Non typical Buy
+    hk::hook::writeBranchLinkAtMainOffset(0x54C324, buyItemHook);  // Buy in shop
+    // Move below to branch Link to enforce game mode requirement
+    hk::hook::writeBranchLinkAtMainOffset(0x318BF8, useCoinCollectHook);  // Don't subtract regional coins
+
     //.installAtSym<"">();
     //.installAtSym<"_ZNK12GameDataFile30findUnlockShineNumCurrentWorldEPb">();
+
+    // Grab Regional Coin Replace
+    hk::hook::writeBranchLinkAtMainOffset(0x529B38, isGotCoinCollectHook);
+    // Fix Regional Counter and Use in Shops
+    hk::hook::writeBranchLinkAtMainOffset(0x5787D0, getCurrentWorldIdForCoinCollectHook);                       // Picture Font
+    hk::hook::writeBranchLinkAtMainOffset(0x556588, getCurrentWorldIdForCoinCollectHook);                       // CoinCollectArchiveName
+    hk::hook::writeBranchLinkAtMainOffset(0x5565E4, getCurrentWorldIdForCoinCollectHook);                       // CoinCollectEmptyArchiveName
+    hk::hook::writeBranchLinkAtMainOffset(0x556640, getCurrentWorldIdForCoinCollectHook);                       // CoinCollect2DArchiveName
+    hk::hook::writeBranchLinkAtMainOffset(0x55669C, getCurrentWorldIdForCoinCollectHook);                       // CoinCollect2DEmptyArchiveName
+    getCoinCollectNumHook.installAtSym<"_ZN16GameDataFunction17getCoinCollectNumE22GameDataHolderAccessor">();  // Gets coin collect num
+                                                                                                                // using world id relative
+                                                                                                                // to ER
+
+    hk::hook::writeBranchLinkAtMainOffset(0x1C2bCC, getCoinCollectCheckGotNumHook);  // Gets num of regional coin checks
+                                                                                     // gotten for pop up on collect
+    hk::hook::writeBranchLinkAtMainOffset(0x1C2BE4, getCoinCollectNumMaxHook);       // Gets total regional coin count
+                                                                                     // for pop up on collect based on relative world
+
+    // Instant Plant Growth QoL
+    hk::hook::writeBranchLinkAtMainOffset(0x28f6d8, growOnPlant);
+
+    // isGotCoinCollectHook.installAtSym<"_ZNK12GameDataFile16isGotCoinCollectEPKN2al11PlacementIdE">();
+    // hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x313334);
 }

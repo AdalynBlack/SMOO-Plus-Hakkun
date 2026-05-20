@@ -2,11 +2,12 @@
 
 #include "../Packet.h"
 
-struct PACKED ShineChecks : Packet {
-    ShineChecks() : Packet() {
-        this->mType = PacketType::SHINECHECKS;
-        mPacketSize = sizeof(ShineChecks) - sizeof(Packet);
+struct PACKED SentChecks : Packet {
+    SentChecks() : Packet() {
+        this->mType = PacketType::SENTCHECKS;
+        mPacketSize = sizeof(SentChecks) - sizeof(Packet);
     };
+    short checkType;
     short shineUid0;
     short shineUid1;
     short shineUid2;

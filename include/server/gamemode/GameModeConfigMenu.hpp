@@ -23,6 +23,8 @@ public:
     virtual void initMenu() { return; };
     virtual void updateDataFromRollParts() { return; };
 
+    virtual const bool hasRollParts() { return false; };
+
     SimpleLayoutMenu* mMenu;
     CommonVerticalList* mList;
 };

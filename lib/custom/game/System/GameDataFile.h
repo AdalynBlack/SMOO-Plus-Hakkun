@@ -745,7 +745,12 @@ public:
     sead::FixedSafeString<128> getPlayerStartId() { return mPlayerStartId; }
     FixedHeapArray<s32, sNumWorlds> getScenarioNumArr() { return mScenarioNo; };
     FixedHeapArray<s32, sNumWorlds> getMainScenarioNumArr() { return mMainScenarioNo; };
-
+    void setWorldId(int index) { mCurrentWorldId = index; };
+    void setMissRestartInfoByChangeStageInfo(ChangeStageInfo* info) { mMissRestartInfo = info; };
+    ChangeStageInfo* getMissRestartInfo() { return mMissRestartInfo; };
+    void setIsUseMissRestartInfo(bool value) { mIsUseMissRestartInfo = value; };
+    int getUseCoinCollectNum(int worldId) { return mUseCoinCollectNum[worldId]; };
+    FixedHeapArray<s32, sNumWorlds> getShineNumList() { return mShineNum; };
     // end custom methods
 
 private:

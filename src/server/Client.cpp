@@ -64,6 +64,8 @@ Client::Client() {
     sead::ScopedCurrentHeapSetter heapSetter(mHeap);  // every new call after this will use ClientHeap instead of SequenceHeap
 
     mReadThread = new al::AsyncFunctorThread("ClientReadThread", al::FunctorV0M<Client*, ClientThreadFunc>(this, &Client::readFunc), 0, 0x1000, {0});
+    mRestartThread =
+        new al::AsyncFunctorThread("RestartReadThread", al::FunctorV0M<Client*, ClientThreadFunc>(this, &Client::restartConnection), 0, 0x1000, {0});
 
     mKeyboard = new Keyboard(nn::swkbd::GetRequiredStringBufferSize());
 
@@ -123,7 +125,11 @@ void Client::init(al::LayoutInitInfo const& initInfo, GameDataHolderAccessor hol
     mUIMessage->setTxtMessage(u"Connecting to Server.");
     mUIMessage->setTxtMessageConfirm(u"Failed to Connect!");
 
-    setConnectStatusMsg(u"Connecting to Server.");
+    if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        setConnectStatusMsg(u"Connecting to Server.");
+    } else {
+        setConnectStatusMsg(u"Connecting to Client...");
+    }
 
     mHolder = holder;
 
@@ -153,16 +159,30 @@ bool Client::startThread() {
     }
 }
 
+bool Client::startReconnectThread() {
+    if (mRestartThread->isDone()) {
+        mRestartThread->start();
+        Logger::log("Reconnect Thread Sucessfully Started.\n");
+        return true;
+    } else {
+        Logger::log("Reconnect Thread has already started! Or other unknown reason.\n");
+        return false;
+    }
+}
+
 void Client::restartConnection() {
-    if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO) && !sInstance->mIsAllowReconnect)
+    if (!sInstance || (!sInstance->mIsAllowReconnect && !GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)))
         return;
 
-    // send disconnect packet
-    Packet* dc = new (sInstance->mHeap) Packet();
-    dc->mType = PacketType::PLAYERDC;
-    dc->mUserID = Client::getClientId();
-    sInstance->mSocket->send(dc);
-    sInstance->mHeap->free(dc);
+    // Send Disconnect Packe4t only if theres an Active Connection
+    if (sInstance->mIsConnectionActive) {
+        Packet* dc = new (sInstance->mHeap) Packet();
+        dc->mType = PacketType::PLAYERDC;
+        dc->mUserID = Client::getClientId();
+        sInstance->mSocket->send(dc);
+        sInstance->mHeap->free(dc);
+        sInstance->mIsConnectionActive = false;
+    }
 
     // close socket
     if (sInstance->mSocket->closeSocket()) {
@@ -181,34 +201,80 @@ void Client::restartConnection() {
     sInstance->mSocket->setLogState(SOCKET_LOG_DISCONNECTED);
     sInstance->mSocket->startEndThread();
 
-    while (!sInstance->mIsConnectionActive) {
+    if (!sInstance->mIsConnectionActive) {
+        while (!sInstance->mReadThread->isDone()) {
+            nn::os::YieldThread();
+            nn::os::SleepThread(nn::TimeSpan::FromMilliSeconds(250));
+        }
+        sInstance->startThread();
+    } else {
         if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
             sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mApClientIP.cstr(), 1027).IsSuccess();
         } else {
             sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mServerIP.cstr(), sInstance->mServerPort).IsSuccess();
         }
-        nn::os::YieldThread();
-        nn::os::SleepThread(nn::TimeSpan::FromMilliSeconds(250));  // BAD
-    }
 
-    if (sInstance->lastGameInfPacket != sInstance->emptyGameInfPacket) {
-        if (sInstance->lastGameInfPacket.mUserID != sInstance->mUserID) {
-            sInstance->lastGameInfPacket.mUserID = sInstance->mUserID;
+        sInstance->mConnectStatus->end();
+        if (!sInstance->mIsConnectionActive) {
+            sInstance->showUIMessage(u"Connection to Client Failed.\nPlease try again.\n\nIf this issue persists, restart the Client and game.");
         }
-        sInstance->mSocket->send(&sInstance->lastGameInfPacket);
+
+        //     Logger::log("Sucessful Connection. Waiting to recieve init packet.\n");
+
+        //     bool waitingForInitPacket = true;
+
+        //     while (waitingForInitPacket == true) {
+        //         Packet* curPacket = sInstance->mSocket->tryGetPacket();
+
+        //         if (curPacket) {
+        //             if (curPacket->mType == PacketType::CLIENTINIT) {
+        //                 InitPacket* initPacket = (InitPacket*)curPacket;
+
+        //                 Logger::log("Server Max Player Size: %d\n", initPacket->maxPlayers);
+
+        //                 sInstance->maxPuppets = initPacket->maxPlayers - 1;
+        //                 sInstance->mPuppetHolder->resizeHolder(sInstance->maxPuppets);
+
+        //                 if (al::isStartWithString(initPacket->ServerVersion, "SMOO+") || al::isStartWithString(initPacket->ServerVersion, "Archipelago")) {
+        //                     sInstance->mIsAllowReconnect = true;
+        //                 } else {
+        //                     sInstance->mIsAllowReconnect = false;
+        //                 }
+
+        //                 setServerVersion(initPacket->ServerVersion);
+        //                 Logger::log("Server version: %s\n", initPacket->ServerVersion);
+
+        //                 waitingForInitPacket = false;
+        //             }
+
+        //             free(curPacket);
+        //         } else {
+        //             Logger::log("Recieve failed! Stopping Connection.\n");
+        //             sInstance->mIsConnectionActive = false;
+        //             waitingForInitPacket = false;
+        //         }
+        //     }
+        // }
     }
 
-    if (sInstance->lastPlayerInfPacket.mUserID == sInstance->mUserID) {
-        sInstance->mSocket->send(&sInstance->lastPlayerInfPacket);
-    }
+    // if (sInstance->lastGameInfPacket != sInstance->emptyGameInfPacket) {
+    //     if (sInstance->lastGameInfPacket.mUserID != sInstance->mUserID) {
+    //         sInstance->lastGameInfPacket.mUserID = sInstance->mUserID;
+    //     }
+    //     sInstance->mSocket->send(&sInstance->lastGameInfPacket);
+    // }
 
-    if (sInstance->lastCostumeInfPacket.mUserID == sInstance->mUserID) {
-        sInstance->mSocket->send(&sInstance->lastCostumeInfPacket);
-    }
+    // if (sInstance->lastPlayerInfPacket.mUserID == sInstance->mUserID) {
+    //     sInstance->mSocket->send(&sInstance->lastPlayerInfPacket);
+    // }
 
-    if (sInstance->lastCaptureInfPacket.mUserID == sInstance->mUserID) {
-        sInstance->mSocket->send(&sInstance->lastCaptureInfPacket);
-    }
+    // if (sInstance->lastCostumeInfPacket.mUserID == sInstance->mUserID) {
+    //     sInstance->mSocket->send(&sInstance->lastCostumeInfPacket);
+    // }
+
+    // if (sInstance->lastCaptureInfPacket.mUserID == sInstance->mUserID) {
+    //     sInstance->mSocket->send(&sInstance->lastCaptureInfPacket);
+    // }
 }
 
 /**
@@ -223,34 +289,32 @@ bool Client::startConnection() {
 
     bool isOverride = al::isPadHoldZL(-1);
 
-    if (mServerIP.isEmpty() || isOverride) {
-        mKeyboard->setHeaderText(u"Save File does not contain an IP!");
-        mKeyboard->setSubText(u"Please set a Server IP Below.");
-        mServerIP = "127.0.0.1";
-        Client::openKeyboardIP();
-        isNeedSave = true;
-    }
+    if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        if (mServerIP.isEmpty() || isOverride) {
+            mKeyboard->setHeaderText(u"Save File does not contain an IP!");
+            mKeyboard->setSubText(u"Please set a Server IP Below.");
+            mServerIP = "127.0.0.1";
+            Client::openKeyboardIP();
+            isNeedSave = true;
+        }
 
-    if (!mServerPort || isOverride) {
-        mKeyboard->setHeaderText(u"Save File does not contain a port!");
-        mKeyboard->setSubText(u"Please set a Server Port Below.");
-        mServerPort = 1027;
-        Client::openKeyboardPort();
-        isNeedSave = true;
+        if (!mServerPort || isOverride) {
+            mKeyboard->setHeaderText(u"Save File does not contain a port!");
+            mKeyboard->setSubText(u"Please set a Server Port Below.");
+            mServerPort = 1027;
+            Client::openKeyboardPort();
+            isNeedSave = true;
+        }
     }
 
     if (isNeedSave) {
         SaveDataAccessFunction::startSaveDataWrite(mHolder.mData);
     }
 
-    while (!sInstance->mIsConnectionActive) {
-        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-            sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mApClientIP.cstr(), 1027).IsSuccess();
-        } else {
-            sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mServerIP.cstr(), sInstance->mServerPort).IsSuccess();
-        }
-        nn::os::YieldThread();
-        nn::os::SleepThread(nn::TimeSpan::FromMilliSeconds(250));  // BAD
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mApClientIP.cstr(), 1027).IsSuccess();
+    } else {
+        sInstance->mIsConnectionActive = sInstance->mSocket->init(sInstance->mServerIP.cstr(), sInstance->mServerPort).IsSuccess();
     }
 
     if (mIsConnectionActive) {
@@ -270,7 +334,7 @@ bool Client::startConnection() {
                     maxPuppets = initPacket->maxPlayers - 1;
                     mPuppetHolder->resizeHolder(maxPuppets);
 
-                    if (al::isStartWithString(initPacket->ServerVersion, "SMOO+")) {
+                    if (al::isStartWithString(initPacket->ServerVersion, "SMOO+") || al::isStartWithString(initPacket->ServerVersion, "Archipelago")) {
                         sInstance->mIsAllowReconnect = true;
                     } else {
                         sInstance->mIsAllowReconnect = false;
@@ -452,7 +516,6 @@ void Client::readFunc() {
         nn::os::SleepThread(nn::TimeSpan::FromMilliSeconds(250));  // sleep active thread for 0.25 seconds
 
         mConnectStatus->end();
-
         return;
     }
 
@@ -464,157 +527,164 @@ void Client::readFunc() {
         Packet* curPacket = mSocket->tryGetPacket();
 
         if (curPacket) {
-            switch (curPacket->mType) {
-            case PacketType::PLAYERINF:
-                updatePlayerInfo((PlayerInf*)curPacket);
-                break;
-            case PacketType::GAMEINF:
-                updateGameInfo((GameInf*)curPacket);
-                break;
-            case PacketType::HACKCAPINF:
-                updateHackCapInfo((HackCapInf*)curPacket);
-                break;
-            case PacketType::CAPTUREINF:
-                updateCaptureInfo((CaptureInf*)curPacket);
-                break;
-            case PacketType::PLAYERCON:
-                updatePlayerConnect((PlayerConnect*)curPacket);
+            if (curPacket->mType < PacketType::SLOTDATA) {
+                switch (curPacket->mType) {
+                case PacketType::PLAYERINF:
+                    updatePlayerInfo((PlayerInf*)curPacket);
+                    break;
+                case PacketType::GAMEINF:
+                    updateGameInfo((GameInf*)curPacket);
+                    break;
+                case PacketType::HACKCAPINF:
+                    updateHackCapInfo((HackCapInf*)curPacket);
+                    break;
+                case PacketType::CAPTUREINF:
+                    updateCaptureInfo((CaptureInf*)curPacket);
+                    break;
+                case PacketType::PLAYERCON:
+                    updatePlayerConnect((PlayerConnect*)curPacket);
 
-                if (lastGameInfPacket != emptyGameInfPacket) {
-                    if (lastGameInfPacket.mUserID != mUserID) {
-                        lastGameInfPacket.mUserID = mUserID;
-                    }
-                    mSocket->send(&lastGameInfPacket);
-                }
-
-                if (lastPlayerInfPacket.mUserID == mUserID) {
-                    mSocket->send(&lastPlayerInfPacket);
-                }
-                if (lastCostumeInfPacket.mUserID == mUserID) {
-                    mSocket->send(&lastCostumeInfPacket);
-                }
-
-                if (lastCaptureInfPacket.mUserID == mUserID) {
-                    mSocket->send(&lastCaptureInfPacket);
-                }
-
-                if (GameModeManager::instance()->isMode(GameMode::SHINETHIEF)) {
-                    ShineThiefInfo* stInfo = GameModeManager::instance()->getInfo<ShineThiefInfo>();
-                    ShineThiefMode* stMode = GameModeManager::instance()->getMode<ShineThiefMode>();
-
-                    if (stInfo && stMode) {
-                        ShineThiefInf* stPacket = new (mHeap) ShineThiefInf();
-                        stPacket->mUserID = mUserID;
-                        stPacket->updateType = ShineThiefUpdateType::PLAYER;
-                        stPacket->isHolder = stInfo->mIsPlayerHolder;
-                        stPacket->isCaught = false;
-                        stPacket->score = stInfo->mPlayerTagScore.mScore;
-                        stPacket->shinePos = stMode->getShinePos();
-
-                        switch (stInfo->mPlayerTeam) {
-                        case ShineThiefTeam::TEAM_1:
-                            stPacket->team = 1;
-                            break;
-                        case ShineThiefTeam::TEAM_2:
-                            stPacket->team = 2;
-                            break;
-                        default:
-                            stPacket->team = 0;
-                            break;
+                    if (lastGameInfPacket != emptyGameInfPacket) {
+                        if (lastGameInfPacket.mUserID != mUserID) {
+                            lastGameInfPacket.mUserID = mUserID;
                         }
-
-                        mSocket->send(stPacket);
-                        mHeap->free(stPacket);
+                        mSocket->send(&lastGameInfPacket);
                     }
+
+                    if (lastPlayerInfPacket.mUserID == mUserID) {
+                        mSocket->send(&lastPlayerInfPacket);
+                    }
+                    if (lastCostumeInfPacket.mUserID == mUserID) {
+                        mSocket->send(&lastCostumeInfPacket);
+                    }
+
+                    if (lastCaptureInfPacket.mUserID == mUserID) {
+                        mSocket->send(&lastCaptureInfPacket);
+                    }
+
+                    if (GameModeManager::instance()->isMode(GameMode::SHINETHIEF)) {
+                        ShineThiefInfo* stInfo = GameModeManager::instance()->getInfo<ShineThiefInfo>();
+                        ShineThiefMode* stMode = GameModeManager::instance()->getMode<ShineThiefMode>();
+
+                        if (stInfo && stMode) {
+                            ShineThiefInf* stPacket = new (mHeap) ShineThiefInf();
+                            stPacket->mUserID = mUserID;
+                            stPacket->updateType = ShineThiefUpdateType::PLAYER;
+                            stPacket->isHolder = stInfo->mIsPlayerHolder;
+                            stPacket->isCaught = false;
+                            stPacket->score = stInfo->mPlayerTagScore.mScore;
+                            stPacket->shinePos = stMode->getShinePos();
+
+                            switch (stInfo->mPlayerTeam) {
+                            case ShineThiefTeam::TEAM_1:
+                                stPacket->team = 1;
+                                break;
+                            case ShineThiefTeam::TEAM_2:
+                                stPacket->team = 2;
+                                break;
+                            default:
+                                stPacket->team = 0;
+                                break;
+                            }
+
+                            mSocket->send(stPacket);
+                            mHeap->free(stPacket);
+                        }
+                    }
+
+                    break;
+                case PacketType::COSTUMEINF:
+                    updateCostumeInfo((CostumeInf*)curPacket);
+                    break;
+                case PacketType::SHINECOLL:
+                    updateShineInfo((ShineCollect*)curPacket);
+                    break;
+                case PacketType::MESSAGE:
+                    updateMessages((MessagePacket*)curPacket);
+                    break;
+                case PacketType::PLAYERDC:
+                    Logger::log("Received Player Disconnect!\n");
+                    curPacket->mUserID.print();
+                    disconnectPlayer((PlayerDC*)curPacket);
+                    break;
+                case PacketType::TAGINF:
+                    updateTagInfo((TagInf*)curPacket);
+                    break;
+                case PacketType::CHANGESTAGE:
+                    sendToStage((ChangeStagePacket*)curPacket);
+                    break;
+                case PacketType::HEALTHCOINS:
+                    updateHealthCoins((HealthCoins*)curPacket);
+                    break;
+                case PacketType::COINCOLLECTCOLL:
+                    updateCoinCollects((CoinCollectCollect*)curPacket);
+                    break;
+
+                case PacketType::CLIENTINIT: {
+                    InitPacket* initPacket = (InitPacket*)curPacket;
+                    Logger::log("Server Max Player Size: %d\n", initPacket->maxPlayers);
+                    maxPuppets = initPacket->maxPlayers - 1;
+                    mPuppetHolder->resizeHolder(maxPuppets);
+                    if (al::isStartWithString(initPacket->ServerVersion, "SMOO+") || al::isStartWithString(initPacket->ServerVersion, "Archipelago")) {
+                        sInstance->mIsAllowReconnect = true;
+                    } else {
+                        sInstance->mIsAllowReconnect = false;
+                    }
+                    setServerVersion(initPacket->ServerVersion);
+                    Logger::log("Server version: ", initPacket->ServerVersion);
+                    break;
                 }
 
-                break;
-            case PacketType::COSTUMEINF:
-                updateCostumeInfo((CostumeInf*)curPacket);
-                break;
-            case PacketType::SHINECOLL:
-                updateShineInfo((ShineCollect*)curPacket);
-                break;
-            case PacketType::MESSAGE:
-                updateMessages((MessagePacket*)curPacket);
-                break;
-            case PacketType::PLAYERDC:
-                Logger::log("Received Player Disconnect!\n");
-                curPacket->mUserID.print();
-                disconnectPlayer((PlayerDC*)curPacket);
-                break;
-            case PacketType::TAGINF:
-                updateTagInfo((TagInf*)curPacket);
-                break;
-            case PacketType::CHANGESTAGE:
-                sendToStage((ChangeStagePacket*)curPacket);
-                break;
-            case PacketType::HEALTHCOINS:
-                updateHealthCoins((HealthCoins*)curPacket);
-                break;
-            case PacketType::COINCOLLECTCOLL:
-                updateCoinCollects((CoinCollectCollect*)curPacket);
-                break;
-
-            case PacketType::CLIENTINIT: {
-                InitPacket* initPacket = (InitPacket*)curPacket;
-                Logger::log("Server Max Player Size: %d\n", initPacket->maxPlayers);
-                maxPuppets = initPacket->maxPlayers - 1;
-                mPuppetHolder->resizeHolder(maxPuppets);
-                if (al::isStartWithString(initPacket->ServerVersion, "SMOO+")) {
-                    sInstance->mIsAllowReconnect = true;
-                } else {
-                    sInstance->mIsAllowReconnect = false;
+                default:
+                    Logger::log("Discarding Unknown Packet Type.\n");
+                    break;
                 }
-                setServerVersion(initPacket->ServerVersion);
-                Logger::log("Server version: ", initPacket->ServerVersion);
-                break;
+
+            } else if (GameModeManager::instance()->getMode<GameModeBase>() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+                // Archipelago Packets
+                switch (curPacket->mType) {
+                case PacketType::CHECK:
+                    receiveCheck((Check*)curPacket);
+                    break;
+                case PacketType::SENTCHECKS:
+                    updateSentChecks((SentChecks*)curPacket);
+                    break;
+                // case PacketType::APCHATMESSAGE:
+                //     updateChatMessages((ArchipelagoChatMessage*)curPacket);
+                //     break;
+                case PacketType::SLOTDATA:
+                    updateSlotData((SlotData*)curPacket);
+                    break;
+                case PacketType::APINFO:
+                    addApInfo((ApInfo*)curPacket);
+                    break;
+                case PacketType::SHINEREPLACE:
+                    updateShineReplace((ShineReplacePacket*)curPacket);
+                    break;
+                case PacketType::SHINECOLOR:
+                    updateShineColor((ShineColor*)curPacket);
+                    break;
+                case PacketType::SHOPREPLACE:
+                    updateShopReplace((ShopReplacePacket*)curPacket);
+                    break;
+                case PacketType::UNLOCKWORLD:
+                    // updateWorlds((UnlockWorld*)curPacket);
+                    break;
+                case PacketType::DEATHLINK:
+                    receiveDeath((Deathlink*)curPacket);
+                    break;
+
+                default:
+                    Logger::log("Discarding Unknown Packet Type.\n");
+                    break;
+                }
             }
-
-            // Archipelago Packets
-            case PacketType::CHECK:
-                receiveCheck((Check*)curPacket);
-                break;
-            case PacketType::SHINECHECKS:
-                updateSentShines((ShineChecks*)curPacket);
-                break;
-            // case PacketType::APCHATMESSAGE:
-            //     updateChatMessages((ArchipelagoChatMessage*)curPacket);
-            //     break;
-            case PacketType::SLOTDATA:
-                updateSlotData((SlotData*)curPacket);
-                break;
-            case PacketType::APINFO:
-                addApInfo((ApInfo*)curPacket);
-                break;
-            case PacketType::SHINEREPLACE:
-                updateShineReplace((ShineReplacePacket*)curPacket);
-                break;
-            case PacketType::SHINECOLOR:
-                updateShineColor((ShineColor*)curPacket);
-                break;
-            case PacketType::SHOPREPLACE:
-                updateShopReplace((ShopReplacePacket*)curPacket);
-                break;
-            case PacketType::UNLOCKWORLD:
-                // updateWorlds((UnlockWorld*)curPacket);
-                break;
-            case PacketType::DEATHLINK:
-                receiveDeath((Deathlink*)curPacket);
-                break;
-
-            default:
-                Logger::log("Discarding Unknown Packet Type.\n");
-                break;
-            }
-
             free(curPacket);
 
         } else {
             Logger::log("Client Socket Encountered an Error! Errno: 0x%x\n", mSocket->socket_errno);
         }
     }
-
     Logger::log("Client Read Thread ending.\n");
 }
 
@@ -1651,15 +1721,16 @@ void Client::updateShines() {
 
         Logger::log("Shine UID: %d\n", shineID);
 
-        if (shineID >= 2000 && shineID <= 2060) {
-            if (!rs::checkGetAchievement(sInstance->mCurStageScene, toadetteMoons[shineID - 2000])) {
-                GameDataHolderAccessor(sInstance->mCurStageScene)->getGameDataFile()->getAchievement(toadetteMoons[shineID - 2000]);
-            }
-            continue;
-        }
-
-        GameDataFile::HintInfo* shineInfo = CustomGameDataFunction::getHintInfoByUniqueID(accessor, shineID);
         if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+            if (shineID >= 2000 && shineID <= 2060) {
+                if (!rs::checkGetAchievement(sInstance->mCurStageScene, toadetteMoons[shineID - 2000])) {
+                    accessor->getGameDataFile()->getAchievement(toadetteMoons[shineID - 2000]);
+                }
+                continue;
+            }
+
+            GameDataFile::HintInfo* shineInfo = CustomGameDataFunction::getHintInfoByUniqueID(accessor, shineID);
+
             if (shineInfo) {
                 if (!GameDataFunction::isGotShine(accessor, shineInfo->stageName.cstr(), shineInfo->objId.cstr())) {
                     Shine* stageShine = findStageShine(shineID);
@@ -1676,6 +1747,8 @@ void Client::updateShines() {
                     GameDataHolderAccessor(accessor)->getGameDataFile()->setGotShine(shineInfo);
                 }
             }
+        } else {
+            sInstance->updateArchipelagoShines(accessor, shineID);
         }
     }
 
@@ -1765,7 +1838,10 @@ void Client::update() {
             Logger::log("update: draining %d pending coin collect(s)\n", sInstance->mPendingCoinCollectCount);
             for (int i = 0; i < sInstance->mPendingCoinCollectCount; i++) {
                 PendingCoinCollect& p = sInstance->mPendingCoinCollects[i];
-                applyOneCoinCollect(p.placeID, p.worldID, p.stage);
+                if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+                    applyOneCoinCollect(p.placeID, p.worldID, p.stage);
+                } else {
+                }
             }
             sInstance->mPendingCoinCollectCount = 0;
         }
@@ -1837,6 +1913,25 @@ const char* Client::getServerVersion() {
     return sInstance->mServerVersion.cstr();
 }
 
+void Client::setDefaultGameMode(int mode) {
+    if (!sInstance) {
+        return;
+    }
+
+    sInstance->mDefaultGameMode = static_cast<GameMode>(mode);
+
+    if (GameModeManager::instance())
+        GameModeManager::instance()->setMode(sInstance->mDefaultGameMode);
+}
+
+GameMode Client::getDefaultGameMode() {
+    if (!sInstance) {
+        return GameMode::NONE;
+    }
+
+    return sInstance->mDefaultGameMode;
+}
+
 PuppetInfo* Client::getDebugPuppetInfo() {
     if (sInstance) {
         return &sInstance->mDebugPuppetInfo;
@@ -1878,7 +1973,8 @@ const bool Client::hasServerChanged() {
     if (!sInstance) {
         return false;
     }
-    return (getCurrentPort() != sInstance->mSocket->getPort() || strcmp(getCurrentIP(), sInstance->mSocket->getIP()) != 0);
+    return (getCurrentPort() != sInstance->mSocket->getPort() || strcmp(getCurrentIP(), sInstance->mSocket->getIP()) != 0) &&
+           !GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO);
 }
 
 void Client::setLastUsedIP(const char* ip) {

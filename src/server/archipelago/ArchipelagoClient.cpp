@@ -47,6 +47,7 @@
 #include "System/WorldList.h"
 #include "thread/seadMessageQueue.h"
 #include "types.h"
+#include "Util/AchievementUtil.h"
 
 // ===== Setters / Getters =====
 /**
@@ -72,7 +73,119 @@ const char* Client::getApClientIP() {
     return nullptr;
 }
 
+/**
+ * @brief sets Archipelago Host Name to supplied string, used specifically for loading from the save file.
+ *
+ * @param ip
+ */
+void Client::setArchipelagoHost(const char* host) {
+    if (sInstance) {
+        sInstance->mArchipelagoHost = host;
+    }
+}
+
+/**
+ * @brief
+ *
+ * @return const char*
+ */
+const char* Client::getArchipelagoHost() {
+    if (sInstance) {
+        return sInstance->mArchipelagoHost.cstr();
+    }
+    return nullptr;
+}
+
+/**
+ * @brief sets Archipelago Port to supplied ushort, used specifically for loading from the save file.
+ *
+ * @param port
+ */
+void Client::setArchipelagoPort(ushort port) {
+    if (sInstance) {
+        sInstance->mArchipelagoPort = port;
+    }
+}
+
+/**
+ * @brief
+ *
+ * @return ushort
+ */
+ushort Client::getArchipelagoPort() {
+    if (sInstance) {
+        return sInstance->mArchipelagoPort;
+    }
+    return 0;
+}
+
+/**
+ * @brief sets Archipelago slot to supplied string, used specifically for loading from the save file.
+ *
+ * @param slot
+ */
+void Client::setArchipelagoSlot(const char* slot) {
+    if (sInstance) {
+        sInstance->mArchipelagoSlot = slot;
+    }
+}
+
+/**
+ * @brief
+ *
+ * @return const char*
+ */
+const char* Client::getArchipelagoSlot() {
+    if (sInstance) {
+        return sInstance->mArchipelagoSlot.cstr();
+    }
+    return nullptr;
+}
+
+/**
+ * @brief sets Archipelago password to supplied string, used specifically for loading from the save file.
+ *
+ * @param ip
+ */
+void Client::setArchipelagoPassword(const char* password) {
+    if (sInstance) {
+        sInstance->mArchipelagoPassword = password;
+    }
+}
+
+/**
+ * @brief
+ *
+ * @return const char*
+ */
+const char* Client::getArchipelagoPassword() {
+    if (sInstance) {
+        return sInstance->mArchipelagoPassword.cstr();
+    }
+    return nullptr;
+}
+
 // ===== Packet Senders =====
+
+void Client::sendArchipelagoConnectPacket() {
+    if (!sInstance) {
+        Logger::log("Static Instance is Null!\n");
+        return;
+    }
+
+    sead::ScopedCurrentHeapSetter setter(sInstance->mHeap);
+
+    ArchipelagoConnect* packet = new ArchipelagoConnect();
+    packet->mUserID = sInstance->mUserID;
+
+    strcpy(packet->hostName, sInstance->mArchipelagoHost.cstr());
+    packet->port = sInstance->mArchipelagoPort;
+    strcpy(packet->slotName, sInstance->mArchipelagoSlot.cstr());
+    strcpy(packet->password, sInstance->mArchipelagoPassword.cstr());
+
+    sInstance->mSocket->queuePacket(packet);
+}
+
 /**
  * @brief
  *
@@ -167,23 +280,28 @@ void Client::receiveCheck(Check* packet) {
     indexMessage.append("Current item index ");
     indexMessage.append(intToCstr(GameModeManager::instance()->getMode<ArchipelagoMode>()->getCheckIndex()));
     // setMessage(2, indexMessage.cstr());
+    // Error Handling
+    sead::FixedSafeString<128> recCheck = sead::FixedSafeString<128>();
 
     switch (itemType) {
-    case -2:
+    case CheckType::Coins:
         // setMessage(3, "Coins Received");
         if (GameModeManager::instance()->getMode<ArchipelagoMode>()->getCheckIndex() < packet->index) {
             GameDataFunction::addCoin(writer, packet->amount);
             updateIndex = true;
         }
         break;
-    case -1:
+
+    case CheckType::Moon:
         if (collectedShineCount < curCollectedShines.size() - 1) {
             curCollectedShines[collectedShineCount] = packet->locationId;
             collectedShineCount++;
+            GameModeManager::instance()->getMode<ArchipelagoMode>()->setIsNeedUpdateCounter(true);
         }
         break;
-    case 0:
-        strcpy(info.name, costumeNames[packet->locationId]);
+
+    case CheckType::Clothes:
+        strcpy(info.name, costumeNamesByCheckId[packet->locationId]);
         info.type = static_cast<ShopItem::ItemType>(itemType);
         infoPtr = &info;
         writer.mData->mPlayingFile->buyItem(infoPtr, false);
@@ -192,8 +310,9 @@ void Client::receiveCheck(Check* packet) {
             updateIndex = true;
         }
         break;
-    case 1:
-        strcpy(info.name, costumeNames[packet->locationId]);
+
+    case CheckType::Cap:
+        strcpy(info.name, costumeNamesByCheckId[packet->locationId]);
         info.type = static_cast<ShopItem::ItemType>(itemType);
         infoPtr = &info;
         writer.mData->mPlayingFile->buyItem(infoPtr, false);
@@ -202,28 +321,53 @@ void Client::receiveCheck(Check* packet) {
             updateIndex = true;
         }
         break;
-    case 2:
+
+    case CheckType::Souvenir:
         strcpy(info.name, souvenirNames[packet->locationId]);
         info.type = static_cast<ShopItem::ItemType>(itemType);
         infoPtr = &info;
         writer.mData->mPlayingFile->buyItem(infoPtr, false);
         break;
-    case 3:
+
+    case CheckType::Sticker:
         strcpy(info.name, stickerNames[packet->locationId]);
         info.type = static_cast<ShopItem::ItemType>(itemType);
         infoPtr = &info;
         writer.mData->mPlayingFile->buyItem(infoPtr, false);
         break;
 
-    case 4: {
-        const al::PlacementId placementId(packet->objId, nullptr, nullptr);
-        writer.mData->mPlayingFile->customAddCoinCollect(&placementId, packet->amount, packet->stage);
+    case CheckType::RegionalCoin:
+        if (!sInstance->mCurStageScene && sInstance->mPendingCoinCollectCount < sMaxPendingCoinCollects) {
+            PendingCoinCollect& pending = sInstance->mPendingCoinCollects[sInstance->mPendingCoinCollectCount++];
+            strcpy(pending.placeID, packet->objId);
+            pending.worldID = packet->amount;
+            strcpy(pending.stage, packet->stage);
+        } else {
+            const al::PlacementId placementId(packet->objId, nullptr, nullptr);
+            writer.mData->getGameDataFile()->customAddCoinCollect(&placementId, packet->amount, packet->stage);
+            sead::FixedSafeString<128> recCoin = sead::FixedSafeString<128>();
+            recCoin = "Received Coin at ";
+            recCoin.append(packet->objId);
+            recCoin.append(", ");
+            recCoin.append(intToCstr(packet->amount));
+            recCoin.append(", ");
+            recCoin.append(packet->stage);
+            // addMessage(recCoin.cstr());
+        }
         break;
-    }
 
-    case 5:
+    case CheckType::Capture:
         GameModeManager::instance()->getMode<ArchipelagoMode>()->addCapture(captureListNames[packet->locationId]);
         GameDataFunction::addHackDictionary(writer, captureListNames[packet->locationId]);
+        recCheck = "Received Capture ";
+        recCheck.append(captureListNames[packet->locationId]);
+        // addMessage(recCheck.cstr());
+        break;
+
+    default:
+        recCheck = "Received Invalid Check Type ";
+        recCheck.append(intToCstr(itemType));
+        addMessage(recCheck.cstr());
         break;
     }
 
@@ -241,129 +385,238 @@ void Client::receiveDeath(Deathlink* packet) {
 }
 
 void Client::updateSlotData(SlotData* packet) {
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-        ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
-        archipelago->setWorldUnlockCount(1, packet->cascade);
-        archipelago->setWorldUnlockCount(2, packet->sand);
-        archipelago->setWorldUnlockCount(3, packet->wooded);
-        archipelago->setWorldUnlockCount(4, packet->lake);
-        archipelago->setWorldUnlockCount(6, packet->lost);
-        archipelago->setWorldUnlockCount(7, packet->metro);
-        archipelago->setWorldUnlockCount(8, packet->seaside);
-        archipelago->setWorldUnlockCount(9, packet->snow);
-        archipelago->setWorldUnlockCount(10, packet->luncheon);
-        archipelago->setWorldUnlockCount(11, packet->ruined);
-        archipelago->setWorldUnlockCount(12, packet->bowser);
-        archipelago->setWorldUnlockCount(15, packet->dark);
-        archipelago->setWorldUnlockCount(16, packet->darker);
-        archipelago->setRegionalsFlag(packet->regionals);
-        archipelago->setCapturesFlag(packet->captures);
-    }
+    ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
+    ArchipelagoInfo* archipelagoInfo = GameModeManager::instance()->getInfo<ArchipelagoInfo>();
+    if (archipelagoInfo) {
+        archipelagoInfo->mIsClientConnected = ArchipelagoState::CLIENT_CONNECTED;
+        archipelago->setConnectInitFlag(true);
+    } else
+        return;
+    archipelago->setWorldUnlockCount(1, packet->cascade);
+    archipelago->setWorldUnlockCount(2, packet->sand);
+    archipelago->setWorldUnlockCount(3, packet->wooded);
+    archipelago->setWorldUnlockCount(4, packet->lake);
+    archipelago->setWorldUnlockCount(6, packet->lost);
+    archipelago->setWorldUnlockCount(7, packet->metro);
+    archipelago->setWorldUnlockCount(8, packet->seaside);
+    archipelago->setWorldUnlockCount(9, packet->snow);
+    archipelago->setWorldUnlockCount(10, packet->luncheon);
+    archipelago->setWorldUnlockCount(11, packet->ruined);
+    archipelago->setWorldUnlockCount(12, packet->bowser);
+    archipelago->setWorldUnlockCount(15, packet->dark);
+    archipelago->setWorldUnlockCount(16, packet->darker);
+    archipelago->setDeathLinkFlag(packet->deathLink);
+    archipelago->setCapturesFlag(packet->captures);
+    archipelago->setERFlag(packet->entranceRandomizer);
 }
 
-void Client::updateSentShines(ShineChecks* packet) {
+void Client::updateSentChecks(SentChecks* packet) {
     if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
         ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
-        archipelago->addShine(packet->shineUid0);
-        archipelago->addShine(packet->shineUid1);
-        archipelago->addShine(packet->shineUid2);
-        archipelago->addShine(packet->shineUid3);
-        archipelago->addShine(packet->shineUid4);
-        archipelago->addShine(packet->shineUid5);
-        archipelago->addShine(packet->shineUid6);
-        archipelago->addShine(packet->shineUid7);
-        archipelago->addShine(packet->shineUid8);
-        archipelago->addShine(packet->shineUid9);
-        archipelago->addShine(packet->shineUid10);
-        archipelago->addShine(packet->shineUid11);
-        archipelago->addShine(packet->shineUid12);
-        archipelago->addShine(packet->shineUid13);
-        archipelago->addShine(packet->shineUid14);
-        archipelago->addShine(packet->shineUid15);
-        archipelago->addShine(packet->shineUid16);
-        archipelago->addShine(packet->shineUid17);
-        archipelago->addShine(packet->shineUid18);
-        archipelago->addShine(packet->shineUid19);
-        archipelago->addShine(packet->shineUid20);
-        archipelago->addShine(packet->shineUid21);
-        archipelago->addShine(packet->shineUid22);
-        archipelago->addShine(packet->shineUid23);
-        archipelago->addShine(packet->shineUid24);
-        archipelago->addShine(packet->shineUid25);
-        archipelago->addShine(packet->shineUid26);
-        archipelago->addShine(packet->shineUid27);
-        archipelago->addShine(packet->shineUid28);
-        archipelago->addShine(packet->shineUid29);
-        archipelago->addShine(packet->shineUid30);
-        archipelago->addShine(packet->shineUid31);
-        archipelago->addShine(packet->shineUid32);
-        archipelago->addShine(packet->shineUid33);
-        archipelago->addShine(packet->shineUid34);
-        archipelago->addShine(packet->shineUid35);
-        archipelago->addShine(packet->shineUid36);
-        archipelago->addShine(packet->shineUid37);
-        archipelago->addShine(packet->shineUid38);
-        archipelago->addShine(packet->shineUid39);
-        archipelago->addShine(packet->shineUid40);
-        archipelago->addShine(packet->shineUid41);
-        archipelago->addShine(packet->shineUid42);
-        archipelago->addShine(packet->shineUid43);
-        archipelago->addShine(packet->shineUid44);
-        archipelago->addShine(packet->shineUid45);
-        archipelago->addShine(packet->shineUid46);
-        archipelago->addShine(packet->shineUid47);
-        archipelago->addShine(packet->shineUid48);
-        archipelago->addShine(packet->shineUid49);
-        archipelago->addShine(packet->shineUid50);
-        archipelago->addShine(packet->shineUid51);
-        archipelago->addShine(packet->shineUid52);
-        archipelago->addShine(packet->shineUid53);
-        archipelago->addShine(packet->shineUid54);
-        archipelago->addShine(packet->shineUid55);
-        archipelago->addShine(packet->shineUid56);
-        archipelago->addShine(packet->shineUid57);
-        archipelago->addShine(packet->shineUid58);
-        archipelago->addShine(packet->shineUid59);
-        archipelago->addShine(packet->shineUid60);
-        archipelago->addShine(packet->shineUid61);
-        archipelago->addShine(packet->shineUid62);
-        archipelago->addShine(packet->shineUid63);
-        archipelago->addShine(packet->shineUid64);
-        archipelago->addShine(packet->shineUid65);
-        archipelago->addShine(packet->shineUid66);
-        archipelago->addShine(packet->shineUid67);
-        archipelago->addShine(packet->shineUid68);
-        archipelago->addShine(packet->shineUid69);
-        archipelago->addShine(packet->shineUid70);
-        archipelago->addShine(packet->shineUid71);
-        archipelago->addShine(packet->shineUid72);
-        archipelago->addShine(packet->shineUid73);
-        archipelago->addShine(packet->shineUid74);
-        archipelago->addShine(packet->shineUid75);
-        archipelago->addShine(packet->shineUid76);
-        archipelago->addShine(packet->shineUid77);
-        archipelago->addShine(packet->shineUid78);
-        archipelago->addShine(packet->shineUid79);
-        archipelago->addShine(packet->shineUid80);
-        archipelago->addShine(packet->shineUid81);
-        archipelago->addShine(packet->shineUid82);
-        archipelago->addShine(packet->shineUid83);
-        archipelago->addShine(packet->shineUid84);
-        archipelago->addShine(packet->shineUid85);
-        archipelago->addShine(packet->shineUid86);
-        archipelago->addShine(packet->shineUid87);
-        archipelago->addShine(packet->shineUid88);
-        archipelago->addShine(packet->shineUid89);
-        archipelago->addShine(packet->shineUid90);
-        archipelago->addShine(packet->shineUid91);
-        archipelago->addShine(packet->shineUid92);
-        archipelago->addShine(packet->shineUid93);
-        archipelago->addShine(packet->shineUid94);
-        archipelago->addShine(packet->shineUid95);
-        archipelago->addShine(packet->shineUid96);
-        archipelago->addShine(packet->shineUid97);
-        archipelago->addShine(packet->shineUid98);
-        archipelago->addShine(packet->shineUid99);
+        if (packet->checkType == CheckType::Moon) {
+            archipelago->addShine(packet->shineUid0);
+            archipelago->addShine(packet->shineUid1);
+            archipelago->addShine(packet->shineUid2);
+            archipelago->addShine(packet->shineUid3);
+            archipelago->addShine(packet->shineUid4);
+            archipelago->addShine(packet->shineUid5);
+            archipelago->addShine(packet->shineUid6);
+            archipelago->addShine(packet->shineUid7);
+            archipelago->addShine(packet->shineUid8);
+            archipelago->addShine(packet->shineUid9);
+            archipelago->addShine(packet->shineUid10);
+            archipelago->addShine(packet->shineUid11);
+            archipelago->addShine(packet->shineUid12);
+            archipelago->addShine(packet->shineUid13);
+            archipelago->addShine(packet->shineUid14);
+            archipelago->addShine(packet->shineUid15);
+            archipelago->addShine(packet->shineUid16);
+            archipelago->addShine(packet->shineUid17);
+            archipelago->addShine(packet->shineUid18);
+            archipelago->addShine(packet->shineUid19);
+            archipelago->addShine(packet->shineUid20);
+            archipelago->addShine(packet->shineUid21);
+            archipelago->addShine(packet->shineUid22);
+            archipelago->addShine(packet->shineUid23);
+            archipelago->addShine(packet->shineUid24);
+            archipelago->addShine(packet->shineUid25);
+            archipelago->addShine(packet->shineUid26);
+            archipelago->addShine(packet->shineUid27);
+            archipelago->addShine(packet->shineUid28);
+            archipelago->addShine(packet->shineUid29);
+            archipelago->addShine(packet->shineUid30);
+            archipelago->addShine(packet->shineUid31);
+            archipelago->addShine(packet->shineUid32);
+            archipelago->addShine(packet->shineUid33);
+            archipelago->addShine(packet->shineUid34);
+            archipelago->addShine(packet->shineUid35);
+            archipelago->addShine(packet->shineUid36);
+            archipelago->addShine(packet->shineUid37);
+            archipelago->addShine(packet->shineUid38);
+            archipelago->addShine(packet->shineUid39);
+            archipelago->addShine(packet->shineUid40);
+            archipelago->addShine(packet->shineUid41);
+            archipelago->addShine(packet->shineUid42);
+            archipelago->addShine(packet->shineUid43);
+            archipelago->addShine(packet->shineUid44);
+            archipelago->addShine(packet->shineUid45);
+            archipelago->addShine(packet->shineUid46);
+            archipelago->addShine(packet->shineUid47);
+            archipelago->addShine(packet->shineUid48);
+            archipelago->addShine(packet->shineUid49);
+            archipelago->addShine(packet->shineUid50);
+            archipelago->addShine(packet->shineUid51);
+            archipelago->addShine(packet->shineUid52);
+            archipelago->addShine(packet->shineUid53);
+            archipelago->addShine(packet->shineUid54);
+            archipelago->addShine(packet->shineUid55);
+            archipelago->addShine(packet->shineUid56);
+            archipelago->addShine(packet->shineUid57);
+            archipelago->addShine(packet->shineUid58);
+            archipelago->addShine(packet->shineUid59);
+            archipelago->addShine(packet->shineUid60);
+            archipelago->addShine(packet->shineUid61);
+            archipelago->addShine(packet->shineUid62);
+            archipelago->addShine(packet->shineUid63);
+            archipelago->addShine(packet->shineUid64);
+            archipelago->addShine(packet->shineUid65);
+            archipelago->addShine(packet->shineUid66);
+            archipelago->addShine(packet->shineUid67);
+            archipelago->addShine(packet->shineUid68);
+            archipelago->addShine(packet->shineUid69);
+            archipelago->addShine(packet->shineUid70);
+            archipelago->addShine(packet->shineUid71);
+            archipelago->addShine(packet->shineUid72);
+            archipelago->addShine(packet->shineUid73);
+            archipelago->addShine(packet->shineUid74);
+            archipelago->addShine(packet->shineUid75);
+            archipelago->addShine(packet->shineUid76);
+            archipelago->addShine(packet->shineUid77);
+            archipelago->addShine(packet->shineUid78);
+            archipelago->addShine(packet->shineUid79);
+            archipelago->addShine(packet->shineUid80);
+            archipelago->addShine(packet->shineUid81);
+            archipelago->addShine(packet->shineUid82);
+            archipelago->addShine(packet->shineUid83);
+            archipelago->addShine(packet->shineUid84);
+            archipelago->addShine(packet->shineUid85);
+            archipelago->addShine(packet->shineUid86);
+            archipelago->addShine(packet->shineUid87);
+            archipelago->addShine(packet->shineUid88);
+            archipelago->addShine(packet->shineUid89);
+            archipelago->addShine(packet->shineUid90);
+            archipelago->addShine(packet->shineUid91);
+            archipelago->addShine(packet->shineUid92);
+            archipelago->addShine(packet->shineUid93);
+            archipelago->addShine(packet->shineUid94);
+            archipelago->addShine(packet->shineUid95);
+            archipelago->addShine(packet->shineUid96);
+            archipelago->addShine(packet->shineUid97);
+            archipelago->addShine(packet->shineUid98);
+            archipelago->addShine(packet->shineUid99);
+        }
+        if (packet->checkType == CheckType::RegionalCoin) {
+            archipelago->addRegionalCoin(packet->shineUid0);
+            archipelago->addRegionalCoin(packet->shineUid1);
+            archipelago->addRegionalCoin(packet->shineUid2);
+            archipelago->addRegionalCoin(packet->shineUid3);
+            archipelago->addRegionalCoin(packet->shineUid4);
+            archipelago->addRegionalCoin(packet->shineUid5);
+            archipelago->addRegionalCoin(packet->shineUid6);
+            archipelago->addRegionalCoin(packet->shineUid7);
+            archipelago->addRegionalCoin(packet->shineUid8);
+            archipelago->addRegionalCoin(packet->shineUid9);
+            archipelago->addRegionalCoin(packet->shineUid10);
+            archipelago->addRegionalCoin(packet->shineUid11);
+            archipelago->addRegionalCoin(packet->shineUid12);
+            archipelago->addRegionalCoin(packet->shineUid13);
+            archipelago->addRegionalCoin(packet->shineUid14);
+            archipelago->addRegionalCoin(packet->shineUid15);
+            archipelago->addRegionalCoin(packet->shineUid16);
+            archipelago->addRegionalCoin(packet->shineUid17);
+            archipelago->addRegionalCoin(packet->shineUid18);
+            archipelago->addRegionalCoin(packet->shineUid19);
+            archipelago->addRegionalCoin(packet->shineUid20);
+            archipelago->addRegionalCoin(packet->shineUid21);
+            archipelago->addRegionalCoin(packet->shineUid22);
+            archipelago->addRegionalCoin(packet->shineUid23);
+            archipelago->addRegionalCoin(packet->shineUid24);
+            archipelago->addRegionalCoin(packet->shineUid25);
+            archipelago->addRegionalCoin(packet->shineUid26);
+            archipelago->addRegionalCoin(packet->shineUid27);
+            archipelago->addRegionalCoin(packet->shineUid28);
+            archipelago->addRegionalCoin(packet->shineUid29);
+            archipelago->addRegionalCoin(packet->shineUid30);
+            archipelago->addRegionalCoin(packet->shineUid31);
+            archipelago->addRegionalCoin(packet->shineUid32);
+            archipelago->addRegionalCoin(packet->shineUid33);
+            archipelago->addRegionalCoin(packet->shineUid34);
+            archipelago->addRegionalCoin(packet->shineUid35);
+            archipelago->addRegionalCoin(packet->shineUid36);
+            archipelago->addRegionalCoin(packet->shineUid37);
+            archipelago->addRegionalCoin(packet->shineUid38);
+            archipelago->addRegionalCoin(packet->shineUid39);
+            archipelago->addRegionalCoin(packet->shineUid40);
+            archipelago->addRegionalCoin(packet->shineUid41);
+            archipelago->addRegionalCoin(packet->shineUid42);
+            archipelago->addRegionalCoin(packet->shineUid43);
+            archipelago->addRegionalCoin(packet->shineUid44);
+            archipelago->addRegionalCoin(packet->shineUid45);
+            archipelago->addRegionalCoin(packet->shineUid46);
+            archipelago->addRegionalCoin(packet->shineUid47);
+            archipelago->addRegionalCoin(packet->shineUid48);
+            archipelago->addRegionalCoin(packet->shineUid49);
+            archipelago->addRegionalCoin(packet->shineUid50);
+            archipelago->addRegionalCoin(packet->shineUid51);
+            archipelago->addRegionalCoin(packet->shineUid52);
+            archipelago->addRegionalCoin(packet->shineUid53);
+            archipelago->addRegionalCoin(packet->shineUid54);
+            archipelago->addRegionalCoin(packet->shineUid55);
+            archipelago->addRegionalCoin(packet->shineUid56);
+            archipelago->addRegionalCoin(packet->shineUid57);
+            archipelago->addRegionalCoin(packet->shineUid58);
+            archipelago->addRegionalCoin(packet->shineUid59);
+            archipelago->addRegionalCoin(packet->shineUid60);
+            archipelago->addRegionalCoin(packet->shineUid61);
+            archipelago->addRegionalCoin(packet->shineUid62);
+            archipelago->addRegionalCoin(packet->shineUid63);
+            archipelago->addRegionalCoin(packet->shineUid64);
+            archipelago->addRegionalCoin(packet->shineUid65);
+            archipelago->addRegionalCoin(packet->shineUid66);
+            archipelago->addRegionalCoin(packet->shineUid67);
+            archipelago->addRegionalCoin(packet->shineUid68);
+            archipelago->addRegionalCoin(packet->shineUid69);
+            archipelago->addRegionalCoin(packet->shineUid70);
+            archipelago->addRegionalCoin(packet->shineUid71);
+            archipelago->addRegionalCoin(packet->shineUid72);
+            archipelago->addRegionalCoin(packet->shineUid73);
+            archipelago->addRegionalCoin(packet->shineUid74);
+            archipelago->addRegionalCoin(packet->shineUid75);
+            archipelago->addRegionalCoin(packet->shineUid76);
+            archipelago->addRegionalCoin(packet->shineUid77);
+            archipelago->addRegionalCoin(packet->shineUid78);
+            archipelago->addRegionalCoin(packet->shineUid79);
+            archipelago->addRegionalCoin(packet->shineUid80);
+            archipelago->addRegionalCoin(packet->shineUid81);
+            archipelago->addRegionalCoin(packet->shineUid82);
+            archipelago->addRegionalCoin(packet->shineUid83);
+            archipelago->addRegionalCoin(packet->shineUid84);
+            archipelago->addRegionalCoin(packet->shineUid85);
+            archipelago->addRegionalCoin(packet->shineUid86);
+            archipelago->addRegionalCoin(packet->shineUid87);
+            archipelago->addRegionalCoin(packet->shineUid88);
+            archipelago->addRegionalCoin(packet->shineUid89);
+            archipelago->addRegionalCoin(packet->shineUid90);
+            archipelago->addRegionalCoin(packet->shineUid91);
+            archipelago->addRegionalCoin(packet->shineUid92);
+            archipelago->addRegionalCoin(packet->shineUid93);
+            archipelago->addRegionalCoin(packet->shineUid94);
+            archipelago->addRegionalCoin(packet->shineUid95);
+            archipelago->addRegionalCoin(packet->shineUid96);
+            archipelago->addRegionalCoin(packet->shineUid97);
+            archipelago->addRegionalCoin(packet->shineUid98);
+            archipelago->addRegionalCoin(packet->shineUid99);
+        }
     }
 }
 
@@ -793,10 +1046,188 @@ void Client::updateShopReplace(ShopReplacePacket* packet) {
             archipelago->setShopMoonTextReplacement(11, {packet->gameIndex11, packet->playerIndex11, packet->itemIndex11, packet->itemClassification11});
             archipelago->setShopMoonTextReplacement(12, {packet->gameIndex12, packet->playerIndex12, packet->itemIndex12, packet->itemClassification12});
         }
+
+        // Over world
+        if (type == 5) {
+            sInstance->sendMessage("ER Overworld");
+            archipelago->setOverWorldStageConnection(packet->gameIndex0, {packet->playerIndex0, packet->itemIndex0});
+            archipelago->setOverWorldStageConnection(packet->itemClassification0, {packet->gameIndex1, packet->playerIndex1});
+            archipelago->setOverWorldStageConnection(packet->itemIndex1, {packet->itemClassification1, packet->gameIndex2});
+            archipelago->setOverWorldStageConnection(packet->playerIndex2, {packet->itemIndex2, packet->itemClassification2});
+            archipelago->setOverWorldStageConnection(packet->gameIndex3, {packet->playerIndex3, packet->itemIndex3});
+            archipelago->setOverWorldStageConnection(packet->itemClassification3, {packet->gameIndex4, packet->playerIndex4});
+            archipelago->setOverWorldStageConnection(packet->itemIndex4, {packet->itemClassification4, packet->gameIndex5});
+            archipelago->setOverWorldStageConnection(packet->playerIndex5, {packet->itemIndex5, packet->itemClassification5});
+            archipelago->setOverWorldStageConnection(packet->gameIndex6, {packet->playerIndex6, packet->itemIndex6});
+            archipelago->setOverWorldStageConnection(packet->itemClassification6, {packet->gameIndex7, packet->playerIndex7});
+            archipelago->setOverWorldStageConnection(packet->itemIndex7, {packet->itemClassification7, packet->gameIndex8});
+            archipelago->setOverWorldStageConnection(packet->playerIndex8, {packet->itemIndex8, packet->itemClassification8});
+            archipelago->setOverWorldStageConnection(packet->gameIndex9, {packet->playerIndex9, packet->itemIndex9});
+            archipelago->setOverWorldStageConnection(packet->itemClassification9, {packet->gameIndex10, packet->playerIndex10});
+            archipelago->setOverWorldStageConnection(packet->itemIndex10, {packet->itemClassification10, packet->gameIndex11});
+            archipelago->setOverWorldStageConnection(packet->playerIndex11, {packet->itemIndex11, packet->itemClassification11});
+            archipelago->setOverWorldStageConnection(packet->gameIndex12, {packet->playerIndex12, packet->itemIndex12});
+            archipelago->setOverWorldStageConnection(packet->itemClassification12, {packet->gameIndex13, packet->playerIndex13});
+            archipelago->setOverWorldStageConnection(packet->itemIndex13, {packet->itemClassification13, packet->gameIndex14});
+            archipelago->setOverWorldStageConnection(packet->playerIndex14, {packet->itemIndex14, packet->itemClassification14});
+            archipelago->setOverWorldStageConnection(packet->gameIndex15, {packet->playerIndex15, packet->itemIndex15});
+            archipelago->setOverWorldStageConnection(packet->itemClassification15, {packet->gameIndex16, packet->playerIndex16});
+            archipelago->setOverWorldStageConnection(packet->itemIndex16, {packet->itemClassification16, packet->gameIndex17});
+            archipelago->setOverWorldStageConnection(packet->playerIndex17, {packet->itemIndex17, packet->itemClassification17});
+            archipelago->setOverWorldStageConnection(packet->gameIndex18, {packet->playerIndex18, packet->itemIndex18});
+            archipelago->setOverWorldStageConnection(packet->itemClassification18, {packet->gameIndex19, packet->playerIndex19});
+            archipelago->setOverWorldStageConnection(packet->itemIndex19, {packet->itemClassification19, packet->gameIndex20});
+            archipelago->setOverWorldStageConnection(packet->playerIndex20, {packet->itemIndex20, packet->itemClassification20});
+            archipelago->setOverWorldStageConnection(packet->gameIndex21, {packet->playerIndex21, packet->itemIndex21});
+            archipelago->setOverWorldStageConnection(packet->itemClassification21, {packet->gameIndex22, packet->playerIndex22});
+            archipelago->setOverWorldStageConnection(packet->itemIndex22, {packet->itemClassification22, packet->gameIndex23});
+            archipelago->setOverWorldStageConnection(packet->playerIndex23, {packet->itemIndex23, packet->itemClassification23});
+            archipelago->setOverWorldStageConnection(packet->gameIndex24, {packet->playerIndex24, packet->itemIndex24});
+            archipelago->setOverWorldStageConnection(packet->itemClassification24, {packet->gameIndex25, packet->playerIndex25});
+            archipelago->setOverWorldStageConnection(packet->itemIndex25, {packet->itemClassification25, packet->gameIndex26});
+            archipelago->setOverWorldStageConnection(packet->playerIndex26, {packet->itemIndex26, packet->itemClassification26});
+            archipelago->setOverWorldStageConnection(packet->gameIndex27, {packet->playerIndex27, packet->itemIndex27});
+            archipelago->setOverWorldStageConnection(packet->itemClassification27, {packet->gameIndex28, packet->playerIndex28});
+            archipelago->setOverWorldStageConnection(packet->itemIndex28, {packet->itemClassification28, packet->gameIndex29});
+            archipelago->setOverWorldStageConnection(packet->playerIndex29, {packet->itemIndex29, packet->itemClassification29});
+            archipelago->setOverWorldStageConnection(packet->gameIndex30, {packet->playerIndex30, packet->itemIndex30});
+            archipelago->setOverWorldStageConnection(packet->itemClassification30, {packet->gameIndex31, packet->playerIndex31});
+            archipelago->setOverWorldStageConnection(packet->itemIndex31, {packet->itemClassification31, packet->gameIndex32});
+            archipelago->setOverWorldStageConnection(packet->playerIndex32, {packet->itemIndex32, packet->itemClassification32});
+            archipelago->setOverWorldStageConnection(packet->gameIndex33, {packet->playerIndex33, packet->itemIndex33});
+            archipelago->setOverWorldStageConnection(packet->itemClassification33, {packet->gameIndex34, packet->playerIndex34});
+            archipelago->setOverWorldStageConnection(packet->itemIndex34, {packet->itemClassification34, packet->gameIndex35});
+            archipelago->setOverWorldStageConnection(packet->playerIndex35, {packet->itemIndex35, packet->itemClassification35});
+            archipelago->setOverWorldStageConnection(packet->gameIndex36, {packet->playerIndex36, packet->itemIndex36});
+            archipelago->setOverWorldStageConnection(packet->itemClassification36, {packet->gameIndex37, packet->playerIndex37});
+        }
+
+        // Sub Area
+        if (type == 6) {
+            sInstance->sendMessage("ER Sub Area");
+            archipelago->setSubAreaStageConnection(packet->gameIndex0, {packet->playerIndex0, packet->itemIndex0});
+            archipelago->setSubAreaStageConnection(packet->itemClassification0, {packet->gameIndex1, packet->playerIndex1});
+            archipelago->setSubAreaStageConnection(packet->itemIndex1, {packet->itemClassification1, packet->gameIndex2});
+            archipelago->setSubAreaStageConnection(packet->playerIndex2, {packet->itemIndex2, packet->itemClassification2});
+            archipelago->setSubAreaStageConnection(packet->gameIndex3, {packet->playerIndex3, packet->itemIndex3});
+            archipelago->setSubAreaStageConnection(packet->itemClassification3, {packet->gameIndex4, packet->playerIndex4});
+            archipelago->setSubAreaStageConnection(packet->itemIndex4, {packet->itemClassification4, packet->gameIndex5});
+            archipelago->setSubAreaStageConnection(packet->playerIndex5, {packet->itemIndex5, packet->itemClassification5});
+            archipelago->setSubAreaStageConnection(packet->gameIndex6, {packet->playerIndex6, packet->itemIndex6});
+            archipelago->setSubAreaStageConnection(packet->itemClassification6, {packet->gameIndex7, packet->playerIndex7});
+            archipelago->setSubAreaStageConnection(packet->itemIndex7, {packet->itemClassification7, packet->gameIndex8});
+            archipelago->setSubAreaStageConnection(packet->playerIndex8, {packet->itemIndex8, packet->itemClassification8});
+            archipelago->setSubAreaStageConnection(packet->gameIndex9, {packet->playerIndex9, packet->itemIndex9});
+            archipelago->setSubAreaStageConnection(packet->itemClassification9, {packet->gameIndex10, packet->playerIndex10});
+            archipelago->setSubAreaStageConnection(packet->itemIndex10, {packet->itemClassification10, packet->gameIndex11});
+            archipelago->setSubAreaStageConnection(packet->playerIndex11, {packet->itemIndex11, packet->itemClassification11});
+            archipelago->setSubAreaStageConnection(packet->gameIndex12, {packet->playerIndex12, packet->itemIndex12});
+            archipelago->setSubAreaStageConnection(packet->itemClassification12, {packet->gameIndex13, packet->playerIndex13});
+            archipelago->setSubAreaStageConnection(packet->itemIndex13, {packet->itemClassification13, packet->gameIndex14});
+            archipelago->setSubAreaStageConnection(packet->playerIndex14, {packet->itemIndex14, packet->itemClassification14});
+            archipelago->setSubAreaStageConnection(packet->gameIndex15, {packet->playerIndex15, packet->itemIndex15});
+            archipelago->setSubAreaStageConnection(packet->itemClassification15, {packet->gameIndex16, packet->playerIndex16});
+            archipelago->setSubAreaStageConnection(packet->itemIndex16, {packet->itemClassification16, packet->gameIndex17});
+            archipelago->setSubAreaStageConnection(packet->playerIndex17, {packet->itemIndex17, packet->itemClassification17});
+            archipelago->setSubAreaStageConnection(packet->gameIndex18, {packet->playerIndex18, packet->itemIndex18});
+            archipelago->setSubAreaStageConnection(packet->itemClassification18, {packet->gameIndex19, packet->playerIndex19});
+            archipelago->setSubAreaStageConnection(packet->itemIndex19, {packet->itemClassification19, packet->gameIndex20});
+            archipelago->setSubAreaStageConnection(packet->playerIndex20, {packet->itemIndex20, packet->itemClassification20});
+            archipelago->setSubAreaStageConnection(packet->gameIndex21, {packet->playerIndex21, packet->itemIndex21});
+            archipelago->setSubAreaStageConnection(packet->itemClassification21, {packet->gameIndex22, packet->playerIndex22});
+            archipelago->setSubAreaStageConnection(packet->itemIndex22, {packet->itemClassification22, packet->gameIndex23});
+            archipelago->setSubAreaStageConnection(packet->playerIndex23, {packet->itemIndex23, packet->itemClassification23});
+            archipelago->setSubAreaStageConnection(packet->gameIndex24, {packet->playerIndex24, packet->itemIndex24});
+            archipelago->setSubAreaStageConnection(packet->itemClassification24, {packet->gameIndex25, packet->playerIndex25});
+            archipelago->setSubAreaStageConnection(packet->itemIndex25, {packet->itemClassification25, packet->gameIndex26});
+            archipelago->setSubAreaStageConnection(packet->playerIndex26, {packet->itemIndex26, packet->itemClassification26});
+            archipelago->setSubAreaStageConnection(packet->gameIndex27, {packet->playerIndex27, packet->itemIndex27});
+            archipelago->setSubAreaStageConnection(packet->itemClassification27, {packet->gameIndex28, packet->playerIndex28});
+            archipelago->setSubAreaStageConnection(packet->itemIndex28, {packet->itemClassification28, packet->gameIndex29});
+            archipelago->setSubAreaStageConnection(packet->playerIndex29, {packet->itemIndex29, packet->itemClassification29});
+            archipelago->setSubAreaStageConnection(packet->gameIndex30, {packet->playerIndex30, packet->itemIndex30});
+            archipelago->setSubAreaStageConnection(packet->itemClassification30, {packet->gameIndex31, packet->playerIndex31});
+            archipelago->setSubAreaStageConnection(packet->itemIndex31, {packet->itemClassification31, packet->gameIndex32});
+            archipelago->setSubAreaStageConnection(packet->playerIndex32, {packet->itemIndex32, packet->itemClassification32});
+            archipelago->setSubAreaStageConnection(packet->gameIndex33, {packet->playerIndex33, packet->itemIndex33});
+            archipelago->setSubAreaStageConnection(packet->itemClassification33, {packet->gameIndex34, packet->playerIndex34});
+            archipelago->setSubAreaStageConnection(packet->itemIndex34, {packet->itemClassification34, packet->gameIndex35});
+            archipelago->setSubAreaStageConnection(packet->playerIndex35, {packet->itemIndex35, packet->itemClassification35});
+            archipelago->setSubAreaStageConnection(packet->gameIndex36, {packet->playerIndex36, packet->itemIndex36});
+            archipelago->setSubAreaStageConnection(packet->itemClassification36, {packet->gameIndex37, packet->playerIndex37});
+        }
     }
 }
 
 // ===== Utility Functions =====
+
+void Client::addMessage(const char* message) {
+    if (!sInstance) {
+        Logger::log("Static Instance is Null!\n");
+        return;
+    }
+    sead::ScopedCurrentHeapSetter setter(sInstance->mHeap);
+
+    MessagePacket* packet = new MessagePacket();
+    strcpy(packet->message, message);
+
+    sInstance->updateMessages(packet);
+}
+
+void Client::sendMessage(const char* message) {
+    if (!sInstance) {
+        Logger::log("Static Instance is Null!\n");
+        return;
+    }
+    sead::ScopedCurrentHeapSetter setter(sInstance->mHeap);
+
+    MessagePacket* packet = new MessagePacket();
+    strcpy(packet->message, message);
+
+    sInstance->mSocket->queuePacket(packet);
+}
+
+void Client::updateArchipelagoShines(GameDataHolderAccessor accessor, int shineID) {
+    // Update to proper range when achievement support added
+    if (shineID >= 2000 && shineID <= 2060) {
+        if (!rs::checkGetAchievement(sInstance->mCurStageScene, toadetteMoons[shineID - 2000])) {
+            accessor->getGameDataFile()->getAchievement(toadetteMoons[shineID - 2000]);
+        }
+        return;
+    }
+
+    GameDataFile::HintInfo* shineInfo = CustomGameDataFunction::getHintInfoByUniqueID(accessor, shineID);
+
+    if (shineInfo) {
+        if (!GameDataFunction::isGotShine(accessor, shineInfo->stageName.cstr(), shineInfo->objId.cstr())) {
+            Shine* stageShine = findStageShine(shineID);
+
+            if (stageShine) {
+                if (al::isDead(stageShine)) {
+                    stageShine->makeActorAlive();
+                }
+
+                stageShine->onSwitchGet();
+            }
+
+            GameDataHolderAccessor(accessor)->getGameDataFile()->setGotShine(shineInfo);
+        }
+    }
+}
+
+void Client::apApplyOneCoinCollect(const char* placeID, int worldID, const char* stage) {
+    const al::PlacementId placementId(placeID, nullptr, nullptr);
+    GameDataHolderWriter writer(sInstance->mCurStageScene);
+    writer.mData->getGameDataFile()->customAddCoinCollect(&placementId, worldID, stage);
+    sead::FixedSafeString<128> recCoin = sead::FixedSafeString<128>();
+    recCoin = "Received Coin at ";
+    recCoin.append(placeID);
+    recCoin.append(", ");
+    recCoin.append(intToCstr(worldID));
+    recCoin.append(", ");
+    recCoin.append(stage);
+    // addMessage(recCoin.cstr());
+}
 
 // ===== UPDATE UI =====
 

@@ -1,8 +1,7 @@
 #pragma once
 
-#include "server/freeze/FreezeTagScore.hpp"
+#include "server/archipelago/ArchipelagoHelpers.hpp"
 #include "server/gamemode/GameModeInfoBase.hpp"
-#include "server/gamemode/GameModeTimer.hpp"
 
 enum ArchipelagoState {  // Client connection state
     NOT_CONNECTED = 0,
@@ -13,6 +12,7 @@ struct ArchipelagoInfo : GameModeInfoBase {
     ArchipelagoInfo() { mMode = GameMode::ARCHIPELAGO; }
 
     ArchipelagoState mIsClientConnected = ArchipelagoState::NOT_CONNECTED;
-
+    bool isNeedArchipelagoConnect = true;
+    bool mIsHintTargetValid = false;
     bool mIsDebugMode = false;
 };

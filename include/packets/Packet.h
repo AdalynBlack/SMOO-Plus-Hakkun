@@ -13,7 +13,7 @@
 #define VERSIONSIZE 0x20  // Change from 0x40 to 0x20 to match C# (32 bytes)
 
 // Archipelago constants
-#define APNAMESIZE 0x28
+#define APNAMESIZE 0x40
 #define ITEMNAMESIZE 0x80
 #define OBJECTIDSIZE 0x20
 
@@ -46,20 +46,22 @@ enum PacketType : short {
     UNLOCKWORLD,
     CHECK,
     DEATHLINK,
-    SHINECHECKS,
+    SENTCHECKS,
     APINFO,
     SHOPREPLACE,
     SHINEREPLACE,
     SHINECOLOR,
+    APCONNECT,
     End  // end of enum for bounds checking
 };
 
 constexpr static const char* packetNames[] = {"Unknown", "Client Initialization", "Player Info", "Player Cap Info", "Game Info", "Tag Info",
                                               //"Freeze Info",
                                               "Player Connect", "Player Disconnect", "Costume Info", "Moon Collection", "Capture Info", "Change Stage",
-                                              "Server Command", "Message", "UDP Initialization", "UDP Hole Punch", "Extra", "Health and Coins", "Buy Shop Item",
-                                              " Archipelago Slot Data ", " Unlock World ", " Archipelago Check ", " Archipelago Deathlink ", "Shine Checks",
-                                              "Archipelago Info", "Archipelago Shop Text", "Archipelago Moon Text", "Archipelago Moon Color"};
+                                              "Server Command", "Message", "UDP Initialization", "UDP Hole Punch", "Extra", "Health and Coins",
+                                              "Regional Coin Collection", "Buy Shop Item", "Archipelago Slot Data ", "Unlock World ", "Archipelago Check ",
+                                              "Archipelago Deathlink", "Sent Checks", "Archipelago Info", "Archipelago Shop Text", "Archipelago Moon Text",
+                                              "Archipelago Moon Color", "Archipelago Server Connect"};
 
 enum SenderType { SERVER, CLIENT };
 
@@ -107,6 +109,7 @@ struct PACKED Packet {
 #include "packets/archipelago/ShineColor.h"
 // #include "packets/archipelago/ArchipelagoChatMessage.h"
 #include "packets/archipelago/ApInfo.h"
+#include "packets/archipelago/ArchipelagoConnect.h"
 #include "packets/archipelago/Deathlink.h"
 #include "packets/archipelago/ShineChecks.h"
 #include "packets/archipelago/ShineReplacePacket.h"

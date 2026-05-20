@@ -93,9 +93,9 @@ public:
     GameDataHolderAccessor& getHolder() { return mHolder; }
     void init(al::LayoutInitInfo const& initInfo, GameDataHolderAccessor holder);
     bool startThread();
+    bool startReconnectThread();
 
     // ===== STATIC CONNECTION METHODS =====
-    static void restartConnection();
     static bool isSocketActive() { return sInstance ? sInstance->mSocket->isConnected() : false; }
     static bool isFirstConnect() { return sInstance ? sInstance->mIsFirstConnect : false; }
 
@@ -170,6 +170,8 @@ public:
     static void setNeedUpdateHealthCoins(bool value);
     static void setServerVersion(const char* serverVersion);
     static const char* getServerVersion();
+    static void setDefaultGameMode(int mode);
+    static GameMode getDefaultGameMode();
 
     // ===== SERVER CONFIGURATION =====
     static const int getCurrentPort();
@@ -249,17 +251,29 @@ public:
     // ===== Archipelago Setters / Getters =====
     static const char* getApClientIP();
     static void setApClientIP(const char* ip);
+    static const char* getArchipelagoHost();
+    static void setArchipelagoHost(const char* host);
+    static ushort getArchipelagoPort();
+    static void setArchipelagoPort(ushort port);
+    static const char* getArchipelagoSlot();
+    static void setArchipelagoSlot(const char* slot);
+    static const char* getArchipelagoPassword();
+    static void setArchipelagoPassword(const char* password);
+    static void addMessage(const char* message);
+    static void sendMessage(const char* message);
 
-    // ===== ARCHIPELAGO PACKET HANDLERS =====
+    // ===== ARCHIPELAGO PACKET SENDERS =====
     static void sendCheckPacket(int locationId, int itemType);
     static void sendCheckPacket(int itemType, const char* objId, const char* stageName);
     static void sendDeathlinkPacket();
     static void sendChangeStagePacket(GameDataHolderAccessor accessor);
+    static void sendArchipelagoConnectPacket();
 
 private:
     // ===== CORE FUNCTIONALITY =====
     void readFunc();
     bool startConnection();
+    void restartConnection();
 
     // ===== PACKET HANDLERS =====
     void updatePlayerInfo(PlayerInf* packet);
@@ -284,13 +298,15 @@ private:
     // void updateChatMessages(ArchipelagoChatMessage* packet);
     void addApInfo(ApInfo* packet);
     void updateSlotData(SlotData* packet);
-    void updateSentShines(ShineChecks* packet);
+    void updateSentChecks(SentChecks* packet);
     void updateShineReplace(ShineReplacePacket* packet);
     void updateShineColor(ShineColor* packet);
     void updateShopReplace(ShopReplacePacket* packet);
     // void updateWorlds(UnlockWorld* packet); // For unimplemented feautre
     void receiveCheck(Check* packet);
     void receiveDeath(Deathlink* packet);
+    void updateArchipelagoShines(GameDataHolderAccessor accessor, int shineID);
+    static void apApplyOneCoinCollect(const char* placeID, int worldID, const char* stage);
 
     // ===== UTILITY METHODS =====
     PuppetInfo* findPuppetInfo(const nn::account::Uid& id, bool isFindAvailable);
@@ -304,6 +320,7 @@ private:
 
     // ===== CONNECTION MEMBERS =====
     al::AsyncFunctorThread* mReadThread = nullptr;
+    al::AsyncFunctorThread* mRestartThread = nullptr;
     int mConnectCount = 0;
     nn::account::Uid mUserID;
     sead::FixedSafeString<0x20> mUsername;
@@ -319,6 +336,10 @@ private:
     bool mIsDisableMusic = false;
     // Separate IP for Archipelago Client
     hostname mApClientIP;
+    sead::FixedSafeString<APNAMESIZE> mArchipelagoHost;
+    ushort mArchipelagoPort = 38281;
+    sead::FixedSafeString<APNAMESIZE> mArchipelagoSlot;
+    sead::FixedSafeString<APNAMESIZE> mArchipelagoPassword;
 
     // ===== HEALTH AND COINS =====
     bool isKids = false;
@@ -358,6 +379,7 @@ private:
     bool isClientCaptured = false;
     bool isSentCaptureInf = false;
     bool isSentHackInf = false;
+    GameMode mDefaultGameMode = static_cast<GameMode>(0);
 
     // ===== SCENE AND STAGE MEMBERS =====
     al::ActorSceneInfo* mSceneInfo = nullptr;
