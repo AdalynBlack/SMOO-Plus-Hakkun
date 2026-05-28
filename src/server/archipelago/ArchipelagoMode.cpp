@@ -1615,7 +1615,7 @@ void ArchipelagoMode::setCappyRsCalls(TryShowCapMessagePriorityLowFn tryShow, Is
 }
 
 void ArchipelagoMode::tryPumpCappyMessage() {
-    const al::IUseSceneObjHolder* scene = (IUseSceneObjHolder*)mSceneObjHolder;
+    const al::IUseSceneObjHolder* scene = mCurScene;
 
     // Scene-stability bookkeeping. Reset BOTH counters whenever
     // mSceneObjHolder changes; bump frames each tick the scene is stable.
