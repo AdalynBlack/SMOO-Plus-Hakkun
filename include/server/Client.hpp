@@ -52,6 +52,7 @@
 #include "packets/Packet.h"
 #include "puppets/PuppetHolder.hpp"
 #include "puppets/PuppetInfo.h"
+#include "server/archipelago/ArchipelagoMode.hpp"
 #include "server/SocketClient.hpp"
 #include "syssocket/sockdefines.h"
 #include "thread/seadMessageQueue.h"

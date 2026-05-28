@@ -59,6 +59,7 @@ void ArchipelagoMode::init(const GameModeInitInfo& info) {
     mMode = info.mMode;
     mCurScene = (StageScene*)info.mScene;
     mPuppetHolder = info.mPuppetHolder;
+    GameDataHolderAccessor accessor(mCurScene);
 
     GameModeInfoBase* curGameInfo = GameModeManager::instance()->getInfo<ArchipelagoInfo>();
 
@@ -77,13 +78,7 @@ void ArchipelagoMode::init(const GameModeInitInfo& info) {
 
         mWorldPayCounts.fill(-1);
 
-        collectedShines.fill(0);
-        collectedOutfits.fill(0);
-        collectedStickers.fill(0);
-        collectedSouvenirs.fill(0);
-        collectedCaptures.fill(0);
-        checkedCaptures.fill(0);
-        mCollectedRegionals.fill(0);
+        clearCollectibles();
 
         shineTextReplacements.fill({0, 0});
         mShineItemNames.fill(sead::FixedSafeString<40>());
@@ -101,7 +96,11 @@ void ArchipelagoMode::init(const GameModeInitInfo& info) {
 
         mOverworldStageConnections.fill({255, 255});
         mSubAreaStageConnections.fill({255, 255});
-        // mModeTimer = new GameModeTimer();
+
+        mLastERStageId = sead::FixedSafeString<128>();
+        mLastERStageName = sead::FixedSafeString<128>();
+
+        mStoryShineArray.allocBuffer(10, nullptr);  // max of 100 shine actors in buffer
     }
 
     Logger::log("Scene Heap Free Size: %f/%f\n", al::getSceneHeap()->getFreeSize() * 0.001f, al::getSceneHeap()->getSize() * 0.001f);
@@ -111,11 +110,13 @@ void ArchipelagoMode::init(const GameModeInitInfo& info) {
     if (!GameModeManager::instance()->isActive())
         GameModeManager::instance()->toggleActive();
 
+    // Clear main shine array
+    clearArrays();
+
     // Create hint arrow
     mHintArrow = new ArchipelagoHintArrow("CheckHintArrow");
     mHintArrow->init(*info.mActorInitInfo);
 
-    GameDataHolderAccessor accessor(mCurScene);
     if (!GameDataFunction::isHomeShipStage(accessor.mData)) {
         Client::sendChangeStagePacket(info.mSceneObjHolder);
     }
@@ -175,38 +176,6 @@ void ArchipelagoMode::begin() {
 
     GameDataHolderAccessor accessor(mCurScene);
     GameDataHolderWriter writer(mCurScene);
-    if (writer.mData->getGameDataFile()->isUseMissRestartInfo()) {
-        // Client::addMessage("Uses Miss Restart Info");
-        // Client::addMessage(writer.mData->getGameDataFile()->getChangeStageInfo()->mChangeStageName.cstr());
-        // Client::addMessage(writer.mData->getGameDataFile()->getChangeStageInfo()->mChangeStageId.cstr());
-        writer.mData->getGameDataFile()->setIsUseMissRestartInfo(false);
-        // if (writer.mData->getGameDataFile()->isUseMissRestartInfo()) {
-        //     Client::addMessage("Flag still True");
-        // } else {
-        //     Client::addMessage("Flag now False");
-        // }
-        // if (al::isEqualString(writer.mData->getGameDataFile()->getMissRestartInfo()->getStageName(), "")) {
-        //     Client::addMessage(writer.mData->getGameDataFile()->getMissRestartInfo()->getStageName());
-        //     Client::addMessage(writer.mData->getGameDataFile()->getMissRestartInfo()->getChangeStageId());
-        // }
-        // if (!al::isEqualString(writer.mData->getGameDataFile()->getMissRestartInfo()->getStageName(), "")) {
-        //     writer.mData->getGameDataFile()->getMissRestartInfo()->mChangeStageName = "";
-        //     writer.mData->getGameDataFile()->getMissRestartInfo()->mChangeStageId = "";
-        // }
-    } else {
-        // Client::addMessage("No Restart Info");
-        // Client::addMessage(writer.mData->getGameDataFile()->getChangeStageInfo()->mChangeStageName.cstr());
-        // Client::addMessage(writer.mData->getGameDataFile()->getChangeStageInfo()->mChangeStageId.cstr());
-    }
-
-    // hit->mCurrentHealth = 3;
-    // for (int i = 0; i < 17; i++) {
-    //     writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForShineList[i] = i;
-    // }
-
-    // for (int i = 0; i < 17; i++) {
-    //     writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForWorldMap[i] = i;
-    // }
 
     // writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexWaterfall()] =
     //     GameDataFunction::getWorldIndexSky();
@@ -291,7 +260,7 @@ ChangeStageInfo* ArchipelagoMode::handleER(const ChangeStageInfo* info) {
     //         accessor.mData->mWorldList->tryFindWorldIndexByMainStageName(getWorldStageNameByRegionalCoinStageList(info->getStageName())));
     // }
 
-    sead::FixedSafeString<32> stageId = sead::FixedSafeString<32>();
+    sead::FixedSafeString<64> stageId = sead::FixedSafeString<64>();
     stageId = info->getChangeStageId();
 
     // Gets custom stageIds added by Archipelago based on kingdom to prevent duplicates
@@ -302,8 +271,8 @@ ChangeStageInfo* ArchipelagoMode::handleER(const ChangeStageInfo* info) {
     bool isInSubArea = false;
     isSubArea(accessor, &isInSubArea, stageId);
 
-    sead::FixedSafeString<32> toStageId = sead::FixedSafeString<32>();
-    sead::FixedSafeString<32> toStageName = sead::FixedSafeString<32>();
+    sead::FixedSafeString<64> toStageId = sead::FixedSafeString<64>();
+    sead::FixedSafeString<64> toStageName = sead::FixedSafeString<64>();
 
     sead::FixedSafeString<128> foo = sead::FixedSafeString<128>();
     foo = "";
@@ -317,6 +286,7 @@ ChangeStageInfo* ArchipelagoMode::handleER(const ChangeStageInfo* info) {
         foo = "";
         foo.append("Error, Invalid Stage ID ");
         foo.append(stageId.cstr());
+        mLastERStageId = stageId.cstr();
         Client::addMessage(foo.cstr());
         setRelativeWorldCoinCollect(info->getStageName());
         return nullptr;
@@ -324,6 +294,7 @@ ChangeStageInfo* ArchipelagoMode::handleER(const ChangeStageInfo* info) {
 
     // Handle Sub area entrances in sub areas (i.e Shiveria)
     // Might fail on snow sub areas ammend with list of strictly effects maps
+    stageConnection currentStageConnection;
     if (isInSubArea) {
         // if (isPartOf(info->getStageName(), "WorldHomeStage")) {
         //     // Access Sub Area connections
@@ -333,15 +304,16 @@ ChangeStageInfo* ArchipelagoMode::handleER(const ChangeStageInfo* info) {
         // } else {
         // Make sure this isn't redundant with new sub area over world test
         // Access Over World conenctions
-        toStageId = stageIdList[mSubAreaStageConnections[stageIdIndex].toStageIdIndex];
-        toStageName = stageNameList[mSubAreaStageConnections[stageIdIndex].toStageNameIndex];
+
+        currentStageConnection = mSubAreaStageConnections[stageIdIndex];
         // }
     } else {
         // Access Over World connections
-        toStageId = stageIdList[mOverworldStageConnections[stageIdIndex].toStageIdIndex];
-        toStageName = stageNameList[mOverworldStageConnections[stageIdIndex].toStageNameIndex];
+        currentStageConnection = mOverworldStageConnections[stageIdIndex];
     }
 
+    toStageId = stageIdList[currentStageConnection.toStageIdIndex];
+    toStageName = stageNameList[currentStageConnection.toStageNameIndex];
     // Corrects custom stageIds added by Archipelago back to the base game stageId
     // Prevents need to change stageIds in game files.
     correctCustomStageId(&toStageId);
@@ -360,7 +332,8 @@ ChangeStageInfo* ArchipelagoMode::handleER(const ChangeStageInfo* info) {
     foo.append(toInfo.getPlacementString());
     Client::addMessage(foo.cstr());
 
-    // mLastERTransition = &toInfo;
+    mLastERStageId = toInfo.mChangeStageId.cstr();
+    mLastERStageName = toInfo.mChangeStageName.cstr();
 
     return &toInfo;
 }
@@ -517,7 +490,7 @@ void ArchipelagoMode::setSubAreaStageConnection(int index, stageConnection repla
 }
 
 void ArchipelagoMode::addShine(int uid) {
-    int shines = collectedShines[uid / 8];
+    int shines = mCollectedShines[uid / 8];
 
     int index = (uid / 8) * 8;
     int i = 1;
@@ -540,7 +513,7 @@ void ArchipelagoMode::addShine(int uid) {
         index += 1;
     }
 
-    collectedShines[uid / 8] = shines;
+    mCollectedShines[uid / 8] = shines;
 }
 
 void ArchipelagoMode::setRecentShineHintIndex(int index) {
@@ -548,7 +521,7 @@ void ArchipelagoMode::setRecentShineHintIndex(int index) {
 }
 
 bool ArchipelagoMode::hasShine(int uid) {
-    int shines = collectedShines[uid / 8];
+    int shines = mCollectedShines[uid / 8];
 
     int index = (uid / 8) * 8;
     int i = 1;
@@ -574,17 +547,17 @@ bool ArchipelagoMode::hasShine(int uid) {
 }
 
 int ArchipelagoMode::getShineChecks(int index) {
-    return collectedShines[index];
+    return mCollectedShines[index];
 }
 
 void ArchipelagoMode::setShineChecks(int index, int checks) {
-    collectedShines[index] = checks;
+    mCollectedShines[index] = checks;
 }
 
 void ArchipelagoMode::addOutfit(const ShopItem::ItemInfo* info) {
     int index = getIndexApCostumeList(info->name) + 44 * static_cast<int>(info->type);
 
-    int outfits = collectedOutfits[index / 8];
+    int outfits = mCollectedOutfits[index / 8];
 
     int curIndex = (index / 8) * 8;
     int i = 1;
@@ -597,7 +570,7 @@ void ArchipelagoMode::addOutfit(const ShopItem::ItemInfo* info) {
         curIndex += 1;
     }
 
-    collectedOutfits[index / 8] = outfits;
+    mCollectedOutfits[index / 8] = outfits;
 }
 
 bool ArchipelagoMode::hasOutfit(const ShopItem::ItemInfo* info) {
@@ -607,7 +580,7 @@ bool ArchipelagoMode::hasOutfit(const ShopItem::ItemInfo* info) {
         return false;
     }
 
-    u8 outfits = collectedOutfits[index / 8];
+    u8 outfits = mCollectedOutfits[index / 8];
 
     int curIndex = (index / 8) * 8;
     int i = 1;
@@ -624,18 +597,18 @@ bool ArchipelagoMode::hasOutfit(const ShopItem::ItemInfo* info) {
 }
 
 int ArchipelagoMode::getOutfitChecks(int index) {
-    return static_cast<int>(collectedOutfits[index]);
+    return static_cast<int>(mCollectedOutfits[index]);
 }
 
 void ArchipelagoMode::setOutfitChecks(int index, int checks) {
     u8 u8Checks = static_cast<u8>(checks);
-    collectedOutfits[index] = u8Checks;
+    mCollectedOutfits[index] = u8Checks;
 }
 
 void ArchipelagoMode::addSticker(const ShopItem::ItemInfo* info) {
     int index = getIndexStickerList(info->name);
 
-    int stickers = collectedStickers[index / 8];
+    int stickers = mCollectedStickers[index / 8];
 
     int curIndex = (index / 8) * 8;
     int i = 1;
@@ -648,7 +621,7 @@ void ArchipelagoMode::addSticker(const ShopItem::ItemInfo* info) {
         curIndex += 1;
     }
 
-    collectedStickers[index / 8] = stickers;
+    mCollectedStickers[index / 8] = stickers;
 }
 
 bool ArchipelagoMode::hasSticker(const ShopItem::ItemInfo* info) {
@@ -658,7 +631,7 @@ bool ArchipelagoMode::hasSticker(const ShopItem::ItemInfo* info) {
         return false;
     }
 
-    u8 stickers = collectedStickers[index / 8];
+    u8 stickers = mCollectedStickers[index / 8];
 
     int curIndex = (index / 8) * 8;
     int i = 1;
@@ -675,18 +648,18 @@ bool ArchipelagoMode::hasSticker(const ShopItem::ItemInfo* info) {
 }
 
 int ArchipelagoMode::getStickerChecks(int index) {
-    return static_cast<int>(collectedStickers[index]);
+    return static_cast<int>(mCollectedStickers[index]);
 }
 
 void ArchipelagoMode::setStickerChecks(int index, int checks) {
     u8 u8Checks = static_cast<u8>(checks);
-    collectedStickers[index] = u8Checks;
+    mCollectedStickers[index] = u8Checks;
 }
 
 void ArchipelagoMode::addSouvenir(const ShopItem::ItemInfo* info) {
     int index = getIndexSouvenirList(info->name);
 
-    int souvenirs = collectedSouvenirs[index / 8];
+    int souvenirs = mCollectedSouvenirs[index / 8];
 
     int curIndex = (index / 8) * 8;
     int i = 1;
@@ -699,7 +672,7 @@ void ArchipelagoMode::addSouvenir(const ShopItem::ItemInfo* info) {
         curIndex += 1;
     }
 
-    collectedSouvenirs[index / 8] = souvenirs;
+    mCollectedSouvenirs[index / 8] = souvenirs;
 }
 
 bool ArchipelagoMode::hasSouvenir(const ShopItem::ItemInfo* info) {
@@ -709,7 +682,7 @@ bool ArchipelagoMode::hasSouvenir(const ShopItem::ItemInfo* info) {
         return false;
     }
 
-    u8 souvenirs = collectedSouvenirs[index / 8];
+    u8 souvenirs = mCollectedSouvenirs[index / 8];
 
     int curIndex = (index / 8) * 8;
     int i = 1;
@@ -726,12 +699,12 @@ bool ArchipelagoMode::hasSouvenir(const ShopItem::ItemInfo* info) {
 }
 
 int ArchipelagoMode::getSouvenirChecks(int index) {
-    return static_cast<int>(collectedSouvenirs[index]);
+    return static_cast<int>(mCollectedSouvenirs[index]);
 }
 
 void ArchipelagoMode::setSouvenirChecks(int index, int checks) {
     u8 u8Checks = static_cast<u8>(checks);
-    collectedSouvenirs[index] = u8Checks;
+    mCollectedSouvenirs[index] = u8Checks;
 }
 
 bool ArchipelagoMode::hasItem(const ShopItem::ItemInfo* info) {
@@ -773,7 +746,7 @@ void ArchipelagoMode::addItem(const ShopItem::ItemInfo* info) {
 void ArchipelagoMode::addCapture(const char* capture) {
     int index = getIndexCaptureList(capture);
 
-    int checkedCapturesEntry = collectedCaptures[index / 8];
+    int checkedCapturesEntry = mCollectedCaptures[index / 8];
 
     int curIndex = (index / 8) * 8;
     int i = 1;
@@ -786,7 +759,7 @@ void ArchipelagoMode::addCapture(const char* capture) {
         curIndex += 1;
     }
 
-    collectedCaptures[index / 8] = checkedCapturesEntry;
+    mCollectedCaptures[index / 8] = checkedCapturesEntry;
 }
 
 bool ArchipelagoMode::hasCapture(const char* capture) {
@@ -800,14 +773,14 @@ bool ArchipelagoMode::hasCapture(const char* capture) {
         return false;
     }
 
-    u8 checkedCaptures = collectedCaptures[index / 8];
+    u8 mCheckedCaptures = mCollectedCaptures[index / 8];
 
     int curIndex = (index / 8) * 8;
     int i = 1;
     while (i < 0x100) {
         if (curIndex == index) {
-            checkedCaptures = checkedCaptures & i;
-            return (checkedCaptures == i);
+            mCheckedCaptures = mCheckedCaptures & i;
+            return (mCheckedCaptures == i);
         }
         i = i << 1;
         curIndex += 1;
@@ -816,31 +789,31 @@ bool ArchipelagoMode::hasCapture(const char* capture) {
 }
 
 int ArchipelagoMode::getCaptureChecks(int index) {
-    return static_cast<int>(collectedCaptures[index]);
+    return static_cast<int>(mCollectedCaptures[index]);
 }
 
 void ArchipelagoMode::setCaptureChecks(int index, int checks) {
     u8 u8Checks = static_cast<u8>(checks);
-    collectedCaptures[index] = u8Checks;
+    mCollectedCaptures[index] = u8Checks;
 }
 
 void ArchipelagoMode::addCaptureCheck(const char* capture) {
     int index = getIndexCaptureList(capture);
 
-    int checkedCapturesEntry = checkedCaptures[index / 8];
+    int mCheckedCapturesEntry = mCheckedCaptures[index / 8];
 
     int curIndex = (index / 8) * 8;
     int i = 1;
     while (i < 0x100) {
         if (curIndex == index) {
-            checkedCapturesEntry = checkedCapturesEntry | i;
+            mCheckedCapturesEntry = mCheckedCapturesEntry | i;
             break;
         }
         i = i << 1;
         curIndex += 1;
     }
 
-    checkedCaptures[index / 8] = checkedCapturesEntry;
+    mCheckedCaptures[index / 8] = mCheckedCapturesEntry;
 }
 
 bool ArchipelagoMode::hasCaptureCheck(const char* capture) {
@@ -854,14 +827,14 @@ bool ArchipelagoMode::hasCaptureCheck(const char* capture) {
         return false;
     }
 
-    u8 checkedCapturesEntry = checkedCaptures[index / 8];
+    u8 mCheckedCapturesEntry = mCheckedCaptures[index / 8];
 
     int curIndex = (index / 8) * 8;
     int i = 1;
     while (i < 0x100) {
         if (curIndex == index) {
-            checkedCapturesEntry = checkedCapturesEntry & i;
-            return (checkedCapturesEntry == i);
+            mCheckedCapturesEntry = mCheckedCapturesEntry & i;
+            return (mCheckedCapturesEntry == i);
         }
         i = i << 1;
         curIndex += 1;
@@ -903,7 +876,7 @@ void ArchipelagoMode::addRegionalCoin(int index) {
     //     return;
     // }
 
-    int checkedRegionalsEntry = mCollectedRegionals[index / 8];
+    u8 checkedRegionalsEntry = mCollectedRegionals[index / 8];
 
     int curIndex = (index / 8) * 8;
     int i = 1;
@@ -1202,6 +1175,28 @@ const char16_t* ArchipelagoMode::getShopReplacementText(const char* fileName, co
 //     apChatLine3 = packet->message3;
 // }
 
+ChangeStageInfo* ArchipelagoMode::getLastERTransition() {
+    if (!mCurScene || mLastERStageId.isEmpty() || mLastERStageName.isEmpty())
+        return nullptr;
+
+    ChangeStageInfo info(GameDataHolderAccessor(mCurScene).mData, mLastERStageId.cstr(), mLastERStageName.cstr());
+    return &info;
+}
+
+void ArchipelagoMode::clearArrays() {
+    mStoryShineArray.clear();
+}
+
+void ArchipelagoMode::clearCollectibles() {
+    mCollectedShines.fill(0);
+    mCollectedOutfits.fill(0);
+    mCollectedStickers.fill(0);
+    mCollectedSouvenirs.fill(0);
+    mCollectedCaptures.fill(0);
+    mCheckedCaptures.fill(0);
+    mCollectedRegionals.fill(0);
+}
+
 void ArchipelagoMode::sendStage(GameDataHolderWriter writer, const ChangeStageInfo* stageInfo) {
     GameDataHolderAccessor accessor(mCurScene);
 
@@ -1257,6 +1252,7 @@ void ArchipelagoMode::update() {
         // Check if Odyssey Active and is ER
         if (mIsConnectInit) {
             mIsConnectInit = false;
+            clearCollectibles();
             if (!GameDataFunction::isEnableCap(accessor)) {
                 GameDataFunction::enableCap(writer);
             }
@@ -1271,20 +1267,20 @@ void ArchipelagoMode::update() {
             if (gameProgressData->mUnlockWorldNum < 2) {
                 gameProgressData->mUnlockWorldNum = 2;
             }
+
             gameProgressData->mIsUnlockWorld[0] = true;
             gameProgressData->mIsUnlockWorld[1] = true;
             gameProgressData->mIsFirstTimeWorld[0] = false;
             gameProgressData->mIsFirstTimeWorld[1] = false;
-            gameProgressData->mWaterfallWorldProgress = GameProgressData::WaterfallWorldProgress::TalkedCapNearHome;
+
             // if (!gameProgressData->isTalkedCapNearHomeInWaterfall())
             //     gameProgressData->talkCapNearHomeInWaterfall();
-            if (GameDataFunction::getCurrentWorldId(accessor) != GameDataFunction::getWorldIndexWaterfall()) {
-                if (!GameDataFunction::isActivateHome(accessor))
-                    GameDataFunction::activateHome(writer);
 
-                if (!GameDataFunction::isLaunchHome(accessor))
-                    GameDataFunction::launchHome(writer);
-            }
+            if (!GameDataFunction::isActivateHome(accessor))
+                GameDataFunction::activateHome(writer);
+
+            if (!GameDataFunction::isLaunchHome(accessor))
+                GameDataFunction::launchHome(writer);
 
             // Correct impassible scenarios
             if (getScenario(GameDataFunction::getWorldIndexPeach()) < 2)
@@ -1293,21 +1289,21 @@ void ArchipelagoMode::update() {
                 setScenario(GameDataFunction::getWorldIndexSpecial1(), 2);
             if (getScenario(GameDataFunction::getWorldIndexHat()) < 2) {
                 setScenario(GameDataFunction::getWorldIndexHat(), 2);
-                if (GameDataFunction::getCurrentWorldId(accessor) == GameDataFunction::getWorldIndexHat())
-                    sendBack();
+                // if (GameDataFunction::getCurrentWorldId(accessor) == GameDataFunction::getWorldIndexHat())
             }
+            sendBack();
         }
 
-        if (GameDataFunction::getCurrentWorldId(accessor) == GameDataFunction::getWorldIndexWaterfall() &&
-            getScenario(GameDataFunction::getWorldIndexWaterfall()) < 3 && GameDataFunction::isLaunchHome(accessor) &&
-            !GameDataFunction::isUnlockedWorld(accessor, GameDataFunction::getWorldIndexSand())) {
-            GameProgressData* gameProgressData = accessor.mData->getGameDataFile()->getGameProgressData();
-            if (accessor.mData->getGameDataFile()->getShineNum(GameDataFunction::getWorldIndexWaterfall()) >=
-                    getWorldUnlockCount(GameDataFunction::getWorldIndexWaterfall()) &&
-                gameProgressData->mHomeLevel == 0) {
-                gameProgressData->mHomeStatus = GameProgressData::HomeStatus::None;
-            }
-        }
+        // if (GameDataFunction::getCurrentWorldId(accessor) == GameDataFunction::getWorldIndexWaterfall() &&
+        //     getScenario(GameDataFunction::getWorldIndexWaterfall()) < 3 && GameDataFunction::isLaunchHome(accessor) &&
+        //     !GameDataFunction::isUnlockedWorld(accessor, GameDataFunction::getWorldIndexSand())) {
+        //     GameProgressData* gameProgressData = accessor.mData->getGameDataFile()->getGameProgressData();
+        //     if (accessor.mData->getGameDataFile()->getShineNum(GameDataFunction::getWorldIndexWaterfall()) >=
+        //             getWorldUnlockCount(GameDataFunction::getWorldIndexWaterfall()) &&
+        //         gameProgressData->mHomeLevel == 0) {
+        //         gameProgressData->mHomeStatus = GameProgressData::HomeStatus::None;
+        //     }
+        // }
 
         if (!mIsEntranceRandomizationEnabled) {
             if (GameDataFunction::getCurrentWorldId(accessor) == GameDataFunction::getWorldIndexForest() &&
@@ -1393,9 +1389,10 @@ void ArchipelagoMode::debugMenuControls() {
     // } → ← ↓ ↑
 }
 
-void ArchipelagoMode::infoMenu() {
+// Returns if menu was drawn
+bool ArchipelagoMode::infoMenu() {
     if (!mIsInfoMenuOpen)
-        return;
+        return false;
 
     ImGui::Begin("Archipelago", nullptr,
                  ImGuiWindowFlags_NoSavedSettings /*| ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse*/ | ImGuiWindowFlags_NoResize |
@@ -1430,10 +1427,13 @@ void ArchipelagoMode::infoMenu() {
     case 3:
         ImGui::Text("\n------------------- Info --------------------\n");
         ImGui::Text("Current Regional Coin World ID: %d", mRelativeWorldCoinCollect);
+        ImGui::Text("\nCurrent last stage ID: \n%s", mLastERStageId.cstr());
+        ImGui::Text("\nCurrent last stage name: \n%s", mLastERStageName.cstr());
         break;
     }
 
     ImGui::Text("\n\n\n\n\n\n\n\n\n\npage %d/%d", mInfoMenuPageNum, mInfoMenuPageMax);
 
     ImGui::End();
+    return true;
 }

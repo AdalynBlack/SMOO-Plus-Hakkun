@@ -2020,6 +2020,12 @@ bool Client::tryRegisterShine(Shine* shine) {
                 return true;
             }
         }
+
+        if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+            if (shine->isMainShine()) {
+                GameModeManager::instance()->getMode<ArchipelagoMode>()->registerStoryShine(shine);
+            }
+        }
     }
     return false;
 }

@@ -241,9 +241,19 @@ static void useCoinCollectHook(GameDataHolderWriter writer, int amount) {
 static void buyItemHook(GameDataFile* file, const ShopItem::ItemInfo* itemInfo, bool isPrepoSave) {
     if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
         GameModeManager::instance()->getMode<ArchipelagoMode>()->sendShopCheck(itemInfo);
+        GameModeManager::instance()->getMode<ArchipelagoMode>()->addItem(itemInfo);
     } else {
         // Send buy item packet here
         file->buyItem(itemInfo, isPrepoSave);
+    }
+}
+
+static bool isBuyItems(ShopItem::ItemInfo* itemInfo) {
+    // Add a collected outfits, gifts, stickers based implementation similar to shinechecks
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        return GameModeManager::instance()->getMode<ArchipelagoMode>()->hasItem(itemInfo);
+    } else {
+        return Client::get()->getHolder()->getGameDataFile()->isBuyItem(itemInfo);
     }
 }
 
@@ -279,7 +289,12 @@ static void changeNextStage(GameDataFile* file, const ChangeStageInfo* stageInfo
         file->changeNextStage(stageInfo, param2);
     } else {
         ArchipelagoMode* apMode = GameModeManager::instance()->getMode<ArchipelagoMode>();
-        ChangeStageInfo* erInfo = apMode->handleER(stageInfo);
+        ChangeStageInfo* erInfo = nullptr;
+        if (file->isUseMissRestartInfo()) {
+            erInfo = apMode->getLastERTransition();
+        } else {
+            erInfo = apMode->handleER(stageInfo);
+        }
         // Client::setMessage(1, stageInfo->mChangeStageId.cstr());
         //  Add Wooded shop moon warp
 
@@ -416,15 +431,6 @@ static const char16_t* getShopItemMessage(al::IUseMessageSystem const* messageSy
     }
     // Default to base game text if no ap text exists
     return al::getSystemMessageString(messageSystem, fileName, key);
-}
-
-static bool isBuyItems(ShopItem::ItemInfo* itemInfo) {
-    // Add a collected outfits, gifts, stickers based implementation similar to shinechecks
-    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        return false;
-    } else {
-        return Client::get()->getHolder()->getGameDataFile()->isBuyItem(itemInfo);
-    }
 }
 
 // ===== Hack Data Replacement =====
