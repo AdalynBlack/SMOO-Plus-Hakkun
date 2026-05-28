@@ -1,5 +1,7 @@
 #include "server/archipelago/ArchipelagoMode.hpp"
 
+#include "hk/svc/api.h"  // hk::svc::getSystemTick — Cappy settle-gate wallclock
+
 #include "sead/heap/seadHeap.h"
 #include "sead/prim/seadSafeString.h"
 
@@ -581,6 +583,56 @@ void ArchipelagoMode::setShineChecks(int index, int checks) {
     collectedShines[index] = checks;
 }
 
+// ===== Talkatoo% mode =====
+// Mirrors addShine/hasShine's packed-bitmap layout (1 bit per uid). The uid
+// range covered is 0..(148*8 - 1) = 0..1183, which spans the apworld's
+// current max uid (1166 — "Lake Gardening: Spiky Passage Seed"). Out-of-range
+// uids are dropped silently rather than overflowing the SafeArray.
+void ArchipelagoMode::markMoonNamed(int uid) {
+    if (uid < 0 || uid / 8 >= static_cast<int>(mNamedShines.size())) {
+        sead::FixedSafeString<48> str;
+        str = "Talkatoo named uid OOB: ";
+        str.append(intToCstr(uid));
+        Client::addMessage(str.cstr());
+        return;
+    }
+    mNamedShines[uid / 8] = static_cast<u8>(mNamedShines[uid / 8] | (1 << (uid % 8)));
+}
+
+void ArchipelagoMode::clearNamedMoons() {
+    mNamedShines.fill(0);
+}
+
+bool ArchipelagoMode::isMoonNamed(int uid) const {
+    if (uid < 0 || uid / 8 >= static_cast<int>(mNamedShines.size())) return false;
+    return (mNamedShines[uid / 8] & (1 << (uid % 8))) != 0;
+}
+
+bool ArchipelagoMode::chooseTalkatooSpokenUtf8(int /*world_id*/, int index, char* out, u32 out_cap) {
+    if (!mTalkatooMode || !out || out_cap < 16) return false;
+
+    // STUB rotation. The vanilla picker passes a stable `index` per visit
+    // when its pool is non-empty; we cycle through three probe strings so
+    // each Talkatoo visit visibly shows a different bubble during bring-up.
+    // Replace with: pick `index`-th moon from the per-kingdom
+    // named-but-uncollected set populated by markMoonNamed.
+    static const char* kProbe[3] = {
+        "Power Moon 1",
+        "Power Moon 2",
+        "Power Moon 3",
+    };
+    const u32 slot = static_cast<u32>(index % 3 + 3) % 3;
+    const char* src = kProbe[slot];
+
+    u32 i = 0;
+    while (src[i] != '\0' && i + 1 < out_cap) {
+        out[i] = src[i];
+        ++i;
+    }
+    out[i] = '\0';
+    return true;
+}
+
 void ArchipelagoMode::addOutfit(const ShopItem::ItemInfo* info) {
     int index = getIndexApCostumeList(info->name) + 44 * static_cast<int>(info->type);
 
@@ -963,6 +1015,24 @@ bool ArchipelagoMode::hasRegionalCoin(int index) {
 }
 
 void ArchipelagoMode::sendMoonCheck(int uid) {
+    // Talkatoo% block. Moons the player hasn't been told about by Talkatoo
+    // don't credit. The cosmetic get-cinematic still plays because we never
+    // hit this method until after sendShinePacketHook has fired; the cutscene
+    // title pane is repurposed via mIsTalkatooBlockedLabelPending +
+    // getShineReplacementText. In our virtualization model Orig is never
+    // called in AP mode (see sendShinePacketHook), so the moon remains
+    // re-collectible on next stage entry — the player can return for it once
+    // Talkatoo names it.
+    //
+    // TODO(progression): scenario-advancing Multi Moons should be exempt
+    // (otherwise the player can soft-lock when the named pool fills up before
+    // the next progression moon is named). Wire either a per-uid exempt list
+    // from the server (preferred — matches apworld's `progression: true` flag)
+    // or the existing rs::isProgressionMoon-style check once available.
+    if (mTalkatooMode && !isMoonNamed(uid)) {
+        mIsTalkatooBlockedLabelPending = true;
+        return;
+    }
     Client::sendCheckPacket(uid, CheckType::Moon);
     if (mInfo && mInfo->mIsClientConnected == ArchipelagoState::CLIENT_CONNECTED)
         addShine(uid);
@@ -998,6 +1068,16 @@ void ArchipelagoMode::sendCaptureCheck(const char* hackName) {
 }
 
 const char* ArchipelagoMode::getShineReplacementText() {
+    // Talkatoo% one-shot override. Consumed by the next setShineLabel call
+    // from the existing isReplaceShineLabel/setShineLabel BL chain (see
+    // hooksArchipelago.hpp). The Multi Moon cutscene fires setShineLabel
+    // three times; the flag is read+cleared on the first to keep the label
+    // stable across the remaining frames of the cutscene.
+    if (mIsTalkatooBlockedLabelPending) {
+        mIsTalkatooBlockedLabelPending = false;
+        return "Blocked by Talkatoo!";
+    }
+
     GameDataHolderAccessor accessor(mCurScene);
 
     shineReplaceText curReplaceText;
@@ -1329,6 +1409,11 @@ void ArchipelagoMode::update() {
 
         handleSoftLocks(accessor, writer);
 
+        // Cappy speech-bubble queue pump. No-op until the rs:: function
+        // pointers are wired (setCappyRsCalls is called from main.cpp once
+        // hk::ro::lookupSymbol resolves both) and the scene-settle gates pass.
+        tryPumpCappyMessage();
+
         mUpdateCounterTimer += 1;
         mSoftlockTimer += 1;
 
@@ -1436,4 +1521,205 @@ void ArchipelagoMode::infoMenu() {
     ImGui::Text("\n\n\n\n\n\n\n\n\n\npage %d/%d", mInfoMenuPageNum, mInfoMenuPageMax);
 
     ImGui::End();
+}
+
+// ===== Cappy Messenger =====
+//
+// In-game speech-bubble notification system. Three pieces:
+//   - enqueueCappyMessage : append a UTF-8 string to a small FIFO.
+//   - tryPumpCappyMessage : called once per frame from update(); drains the
+//     FIFO via rs::tryShowCapMessagePriorityLow + a "Nintendo bubble busy"
+//     poll on rs::isActiveCapMessage.
+//   - lookupCappyMessageSubstitution : consulted by the hooked al::*Message
+//     accessors when CapMessageLayout::exeDelay asks for kArchipelagoCappyLabel.
+//
+// The buffer lifetime contract: once tryShow succeeds, our UTF-16 buffer
+// must stay valid + unchanged until isActiveCapMessage returns false (SMO
+// is reading from the buffer for the duration the balloon is on screen).
+
+namespace {
+
+// Minimal UTF-8 -> UTF-16 transcoder. Stops at NUL or when `out` is full,
+// always NUL-terminates the output, and accepts up to 3-byte UTF-8 sequences
+// (covers the BMP, which is all MessageFont38 can render anyway). Returns
+// the number of char16_t words written excluding the trailing NUL.
+u32 cappyUtf8ToUtf16(const char* src, char16_t* out, u32 out_cap) {
+    if (out_cap == 0 || out == nullptr || src == nullptr) return 0;
+    u32 i = 0;
+    u32 o = 0;
+    while (src[i] != '\0' && o + 1 < out_cap) {
+        const unsigned char b0 = static_cast<unsigned char>(src[i]);
+        if (b0 < 0x80) {
+            out[o++] = static_cast<char16_t>(b0);
+            ++i;
+        } else if ((b0 & 0xE0) == 0xC0 && src[i + 1] != '\0') {
+            const unsigned char b1 = static_cast<unsigned char>(src[i + 1]);
+            out[o++] = static_cast<char16_t>(((b0 & 0x1F) << 6) | (b1 & 0x3F));
+            i += 2;
+        } else if ((b0 & 0xF0) == 0xE0 && src[i + 1] != '\0' && src[i + 2] != '\0') {
+            const unsigned char b1 = static_cast<unsigned char>(src[i + 1]);
+            const unsigned char b2 = static_cast<unsigned char>(src[i + 2]);
+            out[o++] = static_cast<char16_t>(((b0 & 0x0F) << 12) | ((b1 & 0x3F) << 6) | (b2 & 0x3F));
+            i += 3;
+        } else {
+            // Malformed lead byte — skip and continue rather than UB.
+            ++i;
+        }
+    }
+    out[o] = 0;
+    return o;
+}
+
+// Switch system tick is 19.2 MHz (19200 ticks per ms). hk::svc::getSystemTick
+// wraps the SVC; same primitive ApState::nowMs uses in smo_archipelago.
+s64 cappyNowMs() {
+    return static_cast<s64>(hk::svc::getSystemTick() / 19200ULL);
+}
+
+}  // namespace
+
+void ArchipelagoMode::enqueueCappyMessage(const char* utf8_text) {
+    if (!utf8_text || utf8_text[0] == '\0') return;
+    if (mCappyLiveCount >= kCappyQueueCap) {
+        // Drop newest. Matches smo_archipelago CappyMessenger behavior — the
+        // dropped item is recent (likely a stale notification from a bulk
+        // replay) and queued items are older and more representative of what
+        // the player has been waiting on.
+        Logger::log("[cappy] queue full (cap=%u) — dropping '%s'\n",
+                    static_cast<unsigned>(kCappyQueueCap), utf8_text);
+        return;
+    }
+    CappyEntry& e = mCappyQueue[mCappyTail];
+    // strncpy with explicit NUL termination — strlcpy isn't available.
+    u32 i = 0;
+    while (utf8_text[i] != '\0' && i + 1 < kCappyTextCap) {
+        e.text[i] = utf8_text[i];
+        ++i;
+    }
+    e.text[i] = '\0';
+    e.live = true;
+    mCappyTail = (mCappyTail + 1) % kCappyQueueCap;
+    ++mCappyLiveCount;
+}
+
+// Class-static rs:: entry-point cache definitions. See header comment.
+ArchipelagoMode::TryShowCapMessagePriorityLowFn ArchipelagoMode::sTryShowCapMessage = nullptr;
+ArchipelagoMode::IsActiveCapMessageFn           ArchipelagoMode::sIsActiveCapMessage = nullptr;
+
+void ArchipelagoMode::setCappyRsCalls(TryShowCapMessagePriorityLowFn tryShow,
+                                      IsActiveCapMessageFn isActive) {
+    sTryShowCapMessage = tryShow;
+    sIsActiveCapMessage = isActive;
+}
+
+void ArchipelagoMode::tryPumpCappyMessage() {
+    const al::IUseSceneObjHolder* scene = mSceneObjHolder;
+
+    // Scene-stability bookkeeping. Reset BOTH counters whenever
+    // mSceneObjHolder changes; bump frames each tick the scene is stable.
+    if (scene != mCappyLastScene) {
+        mCappyLastScene = scene;
+        mCappySettleFrames = 0;
+        mCappySceneChangeMs = (scene != nullptr) ? cappyNowMs() : 0;
+        if (mCappyBufferInUse) {
+            // Force-release: SMO can't be reading the buffer through a torn-
+            // down scene. The next bubble re-fills the same memory.
+            mCappyBufferInUse = false;
+        }
+    } else if (scene != nullptr) {
+        ++mCappySettleFrames;
+    }
+
+    if (mCappyLiveCount == 0) return;
+    if (!scene) return;
+    if (!sTryShowCapMessage || !sIsActiveCapMessage) return;
+
+    // Dual settle gate: both halves must pass. See header for the rationale
+    // (frame-only fails on Ryujinx during save load; ms-only fails on real
+    // Switch when scene resolves before any frame runs).
+    {
+        const s64 elapsedMs = mCappySceneChangeMs == 0
+            ? 0 : cappyNowMs() - mCappySceneChangeMs;
+        if (mCappySettleFrames < kCappySettleFrames) return;
+        if (elapsedMs < kCappySettleMs) return;
+    }
+
+    // If our buffer is still live, wait for Nintendo's bubble pipeline to
+    // finish reading it before releasing.
+    if (mCappyBufferInUse) {
+        if (sIsActiveCapMessage(scene)) return;
+        mCappyBufferInUse = false;
+    }
+
+    // Pre-flight: don't try to dispatch while a non-AP Cappy bubble is on
+    // screen — rs::tryShowCapMessagePriorityLow would either refuse or queue
+    // us indefinitely. Bump a retry counter; if we get stuck, drop the head
+    // entry rather than blocking the FIFO forever.
+    if (sIsActiveCapMessage(scene)) {
+        ++mCappyRetryFrames;
+        if (mCappyRetryFrames >= kCappyMaxRetryFrames) {
+            Logger::log("[cappy] dropping head after %u frames (text='%s')\n",
+                        static_cast<unsigned>(mCappyRetryFrames),
+                        mCappyQueue[mCappyHead].text);
+            mCappyQueue[mCappyHead].live = false;
+            mCappyHead = (mCappyHead + 1) % kCappyQueueCap;
+            --mCappyLiveCount;
+            mCappyRetryFrames = 0;
+        }
+        return;
+    }
+
+    // Prepare the substitution buffer.
+    CappyEntry& e = mCappyQueue[mCappyHead];
+    const u32 written = cappyUtf8ToUtf16(e.text, mCappyBuffer, kCappyBufferWords);
+    if (written == 0 && e.text[0] != '\0') {
+        Logger::log("[cappy] utf8->utf16 produced empty buffer for '%s' — dropping head\n",
+                    e.text);
+        mCappyQueue[mCappyHead].live = false;
+        mCappyHead = (mCappyHead + 1) % kCappyQueueCap;
+        --mCappyLiveCount;
+        mCappyRetryFrames = 0;
+        return;
+    }
+    mCappyBufferInUse = true;
+
+    // CAVEAT (verified by smo_archipelago disassembly of rs::tryShowCapMessage
+    // PriorityLow at 0x23a910 + CapMessageShowInfo ctor at 0x23a540): the
+    // function's 3rd arg lands in mWaitTime and its 4th in mDelayTime — wait
+    // FIRST, delay SECOND. Opposite of the natural reading order.
+    const bool ok = sTryShowCapMessage(scene, kArchipelagoCappyLabel,
+                                       /*waitTime=*/kCappyWaitTicks,
+                                       /*delayTime=*/0);
+    if (!ok) {
+        mCappyBufferInUse = false;
+        ++mCappyRetryFrames;
+        if (mCappyRetryFrames >= kCappyMaxRetryFrames) {
+            Logger::log("[cappy] dropping head after %u tryShow refusals (text='%s')\n",
+                        static_cast<unsigned>(mCappyRetryFrames),
+                        mCappyQueue[mCappyHead].text);
+            mCappyQueue[mCappyHead].live = false;
+            mCappyHead = (mCappyHead + 1) % kCappyQueueCap;
+            --mCappyLiveCount;
+            mCappyRetryFrames = 0;
+        }
+        return;
+    }
+
+    // Dispatched. Advance head; mCappyBufferInUse stays true until the
+    // isActive poll above flips false (SMO keeps reading the buffer for the
+    // duration of the on-screen balloon).
+    mCappyQueue[mCappyHead].live = false;
+    mCappyHead = (mCappyHead + 1) % kCappyQueueCap;
+    --mCappyLiveCount;
+    mCappyRetryFrames = 0;
+}
+
+const char16_t* ArchipelagoMode::lookupCappyMessageSubstitution(const char* label) const {
+    if (!label) return nullptr;
+    // Cheap-first: vast majority of MSBT lookups are not for our label.
+    // kArchipelagoCappyLabel starts with 'A'.
+    if (label[0] != 'A') return nullptr;
+    if (strcmp(label, kArchipelagoCappyLabel) != 0) return nullptr;
+    if (!mCappyBufferInUse) return nullptr;
+    return mCappyBuffer;
 }

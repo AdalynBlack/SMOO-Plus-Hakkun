@@ -635,3 +635,214 @@ static bool isExistHomeHook(GameDataHolderAccessor accessor) {
 //         }
 //     }
 // }
+
+// =============================================================================
+// Talkatoo% mode + Cappy Messenger hooks
+// =============================================================================
+//
+// These hooks are inert until the corresponding ArchipelagoMode flags are
+// flipped on:
+//   - Talkatoo speech substitution:  ArchipelagoMode::setTalkatooMode(true)
+//   - Cappy speech-bubble dispatch:  ArchipelagoMode::setCappyRsCalls(...)
+//                                    + ArchipelagoMode::enqueueCappyMessage(...)
+//
+// All trampolines pass through to Orig when not in ARCHIPELAGO mode, so they
+// are also safe to leave installed during multiplayer or freeze-tag modes.
+//
+// Symbol provenance is on each block. The mangled strings here mirror the
+// entries appended to syms/main.sym in the same commit.
+
+// ----- Talkatoo speech substitution -----
+//
+// Trampoline on GameDataFunction::tryFindShineMessage(const al::LiveActor*,
+// const al::IUseMessageSystem*, s32 world_id, s32 index). Talkatoo's
+// Poetter::exeWait picks an index from rs::calcShineIndexTableNameAvailable
+// and calls this to resolve it to a char16_t* for the speech bubble. We let
+// vanilla run, then if (a) Talkatoo% mode is on AND (b) the caller is a
+// Poetter (vptr range-check against _ZTV7Poetter), substitute our buffer.
+//
+// Why vtable filter, not per-callsite hook: tryFindShineMessage is also
+// called from cutscene cards, the pause-menu Power Moon list, and Achievement
+// reveal popups. Substituting at those would visibly corrupt non-Talkatoo
+// flows. The vtable check costs one load + one compare per call.
+
+namespace TalkatooHook {
+
+// Address of _ZTV7Poetter resolved at install time. 0 = symbol lookup failed
+// (degraded mode — substitute hook returns vanilla for every caller).
+static uintptr_t g_poetterVtableAddr = 0;
+
+// Vtable span: _ZTV7Poetter primary table + immediately-following Poetter-only
+// aux symbols (_ZTT7Poetter, _ZTC7Poetter, _ZTI7Poetter). Range-check window
+// is widened from the primary table's ~0x1f8 bytes to 0x400 to also catch
+// vptrs that briefly point into a construction-vtable during ctor.
+constexpr uintptr_t kPoetterVtableSpan = 0x400;
+
+// UTF-16 buffer rotation. The hook returns a char16_t* that SMO stores at
+// Poetter+0x130 and reads via an EventFlow for the duration of the speech
+// bubble (~3-5 s). Four slots make overlapping bubbles + re-entrant calls
+// safe under the single-Talkatoo-per-scene invariant.
+static constexpr size_t kUtfBufCount = 4;
+static constexpr size_t kUtfBufWords = 200;
+static char16_t g_utfBuffers[kUtfBufCount][kUtfBufWords] = {};
+static size_t g_utfBufCursor = 0;
+
+// Widen UTF-8-ASCII (after the chooseTalkatooSpokenUtf8 stub) into the next
+// rotation slot. Returns the buffer pointer; never returns null (worst case:
+// an empty buffer).
+static const char16_t* asciiToUtf16BufStatic(const char* src) {
+    const size_t slot = (g_utfBufCursor++) % kUtfBufCount;
+    char16_t* dst = g_utfBuffers[slot];
+    size_t o = 0;
+    if (src) {
+        while (src[o] != '\0' && o + 1 < kUtfBufWords) {
+            dst[o] = static_cast<char16_t>(static_cast<unsigned char>(src[o]));
+            ++o;
+        }
+    }
+    dst[o] = 0;
+    return dst;
+}
+
+// Range-check the actor's vptr (offset 0) against the Poetter vtable window.
+// Treats g_poetterVtableAddr == 0 as "not a Poetter" so an install-time
+// lookup failure degrades to vanilla speech instead of crashing.
+static bool actorIsPoetter(const void* actor) {
+    if (!actor || g_poetterVtableAddr == 0) return false;
+    const uintptr_t vptr = *reinterpret_cast<const uintptr_t*>(actor);
+    return vptr >= g_poetterVtableAddr
+        && vptr <  g_poetterVtableAddr + kPoetterVtableSpan;
+}
+
+}  // namespace TalkatooHook
+
+static HkTrampoline<const char16_t*, const al::LiveActor*, const al::IUseMessageSystem*, int, int>
+    tryFindShineMessageHook = hk::hook::trampoline(
+        [](const al::LiveActor* actor, const al::IUseMessageSystem* sys,
+           int worldId, int index) -> const char16_t* {
+            const char16_t* vanilla = tryFindShineMessageHook.orig(actor, sys, worldId, index);
+
+            if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+                return vanilla;
+            }
+            if (!TalkatooHook::actorIsPoetter(actor)) {
+                return vanilla;
+            }
+
+            ArchipelagoMode* apMode = GameModeManager::instance()->getMode<ArchipelagoMode>();
+            if (!apMode->getTalkatooMode()) {
+                return vanilla;
+            }
+
+            char ascii[64];
+            if (!apMode->chooseTalkatooSpokenUtf8(worldId, index, ascii, sizeof(ascii))) {
+                return vanilla;
+            }
+            return TalkatooHook::asciiToUtf16BufStatic(ascii);
+        });
+
+// ----- Talkatoo% picker non-exhaustion -----
+//
+// Force-false on GameDataFile::isOpenShineName under talkatoo_mode so
+// rs::calcShineIndexTableNameAvailable's pool stays at full capacity (it
+// counts "indices where this getter returns false"). Without this, every
+// vanilla Talkatoo visit shrinks the pool by one and after enough visits
+// Poetter shows the terminal "No more hints" line and tryFindShineMessage
+// is never called again. See the smo_archipelago equivalent for full
+// rationale (worktree's switch-mod/src/hooks/TalkatooMenuMarkHook.cpp).
+//
+// Pre-approved tradeoff: under talkatoo_mode the pause-menu Power Moon list
+// shows NO moons as "named" (vanilla, AP, and Hint-Toad reveals all render
+// unmarked). Achievement-hint reveals also re-show next session. Both
+// regressions are accepted to keep the picker non-exhausting.
+
+static HkTrampoline<bool, const GameDataFile*, int, int>
+    isOpenShineNameHook = hk::hook::trampoline(
+        [](const GameDataFile* self, int worldId, int index) -> bool {
+            if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+                return isOpenShineNameHook.orig(self, worldId, index);
+            }
+            if (!GameModeManager::instance()->getMode<ArchipelagoMode>()->getTalkatooMode()) {
+                return isOpenShineNameHook.orig(self, worldId, index);
+            }
+            // Talkatoo% mode ON: force false so the picker pool stays full.
+            return false;
+        });
+
+// Pass-through trampoline on GameDataFile::tryUnlockShineName. Kept hooked
+// for observability only — log the first hit per session so we can confirm
+// non-Talkatoo callers (Achievement reveal, Hint-Toad) exist in this build
+// of SMO. Vanilla logic runs unchanged.
+static HkTrampoline<bool, GameDataFile*, int, int>
+    tryUnlockShineNameHook = hk::hook::trampoline(
+        [](GameDataFile* self, int worldId, int index) -> bool {
+            static bool s_loggedFirst = false;
+            if (!s_loggedFirst) {
+                s_loggedFirst = true;
+                sead::FixedSafeString<80> str;
+                str = "[talkatoo] first tryUnlockShineName world=";
+                str.append(intToCstr(worldId));
+                str.append(" idx=");
+                str.append(intToCstr(index));
+                Client::addMessage(str.cstr());
+            }
+            return tryUnlockShineNameHook.orig(self, worldId, index);
+        });
+
+// ----- Cappy Messenger: text-system intercept -----
+//
+// Four trampolines on al's per-mstxt-file message accessors. When
+// CapMessageLayout::exeDelay (called from rs::tryShowCapMessagePriorityLow
+// downstream) asks for ArchipelagoMode::kArchipelagoCappyLabel and a Cappy
+// buffer is currently live, return our UTF-16 buffer and synthesize the
+// "label exists" probe. All four are hooked because exeDelay dispatches
+// through either the System or Stage variant based on
+// CapMessageShowInfo::isStageMessage; rs::tryShowCapMessagePriorityLow uses
+// the System path but defensive hooking of both costs little and protects
+// against future code that uses the Stage path.
+
+static HkTrampoline<bool, const al::IUseMessageSystem*, const char*, const char*>
+    isExistLabelInSystemMessageHook = hk::hook::trampoline(
+        [](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> bool {
+            if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+                if (GameModeManager::instance()->getMode<ArchipelagoMode>()
+                        ->lookupCappyMessageSubstitution(label) != nullptr) {
+                    return true;
+                }
+            }
+            return isExistLabelInSystemMessageHook.orig(sys, mstxt, label);
+        });
+
+static HkTrampoline<const char16_t*, const al::IUseMessageSystem*, const char*, const char*>
+    getSystemMessageStringTrampolineHook = hk::hook::trampoline(
+        [](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> const char16_t* {
+            if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+                const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()
+                    ->lookupCappyMessageSubstitution(label);
+                if (sub) return sub;
+            }
+            return getSystemMessageStringTrampolineHook.orig(sys, mstxt, label);
+        });
+
+static HkTrampoline<bool, const al::IUseMessageSystem*, const char*, const char*>
+    isExistLabelInStageMessageHook = hk::hook::trampoline(
+        [](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> bool {
+            if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+                if (GameModeManager::instance()->getMode<ArchipelagoMode>()
+                        ->lookupCappyMessageSubstitution(label) != nullptr) {
+                    return true;
+                }
+            }
+            return isExistLabelInStageMessageHook.orig(sys, mstxt, label);
+        });
+
+static HkTrampoline<const char16_t*, const al::IUseMessageSystem*, const char*, const char*>
+    getStageMessageStringHook = hk::hook::trampoline(
+        [](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> const char16_t* {
+            if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+                const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()
+                    ->lookupCappyMessageSubstitution(label);
+                if (sub) return sub;
+            }
+            return getStageMessageStringHook.orig(sys, mstxt, label);
+        });

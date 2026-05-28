@@ -92,6 +92,39 @@ public:
     bool getCapturesFlag() { return mCapturesEnabled; };
     void setERFlag(bool value) { mIsEntranceRandomizationEnabled = value; };
     bool getERFlag() { return mIsEntranceRandomizationEnabled; };
+
+    // ===== Talkatoo% mode =====
+    // When enabled, Talkatoo's speech bubble names AP-pool moons drawn from
+    // the per-kingdom named set (populated by markMoonNamed), and collecting
+    // a moon that has NOT been named is silently rejected: the get-cinematic
+    // plays cosmetically, sendMoonCheck is suppressed, and the cutscene's
+    // title pane shows "Blocked by Talkatoo!". In smoo-plus-hakkun's
+    // virtualization model, blocked moons remain re-collectible on stage
+    // re-entry because Orig never flips the underlying GameDataFile bit in
+    // AP mode (see sendShinePacketHook in main.cpp).
+    //
+    // The named set is bridge-populated via markMoonNamed. Until at least one
+    // moon has been marked named, Talkatoo% mode is effectively unplayable
+    // — that's the load-bearing wire contract the server side must satisfy
+    // before flipping this flag on for a player.
+    void setTalkatooMode(bool value) { mTalkatooMode = value; }
+    bool getTalkatooMode() const { return mTalkatooMode; }
+    void markMoonNamed(int uid);
+    void clearNamedMoons();
+    bool isMoonNamed(int uid) const;
+
+    // Hook callback: pick a moon name Talkatoo should speak instead of his
+    // vanilla pick. Fills `out` with up to `out_cap-1` ASCII bytes + NUL and
+    // returns true; returns false if no substitute is available (caller falls
+    // back to vanilla speech). The hook then widens `out` into its own static
+    // UTF-16 buffer rotation — ArchipelagoMode does NOT own the lifetime of
+    // the char16_t* passed to SMO.
+    //
+    // STUB: current implementation rotates through "Power Moon #N" probes so
+    // bring-up is testable without a wire-format change. Replace with a real
+    // per-(world_id, named-but-uncollected) pick once the server side ships
+    // the named-moon list to the mod.
+    bool chooseTalkatooSpokenUtf8(int world_id, int index, char* out, u32 out_cap);
     void setConnectInitFlag(bool value) { mIsConnectInit = value; };
     bool getConnectInitFlag() { return mIsConnectInit; };
     void setCurWorldShineList(int worldId) { mCurWorldShineList = worldId; };
@@ -141,6 +174,36 @@ public:
 
     void setWipeHolder(al::WipeHolder* wipe) { mWipeHolder = wipe; };  // Called with HakoniwaSequence hook, wipe used in recovery event
 
+    // ===== Cappy Messenger — in-game speech-bubble notifications =====
+    // enqueueCappyMessage queues a UTF-8 string (truncated at kCappyTextCap
+    // bytes) for display via the existing rs::tryShowCapMessagePriorityLow
+    // pipeline. tryPumpCappyMessage is called once per frame from update().
+    //
+    // lookupCappyMessageSubstitution is consulted by the hooked al::*Message
+    // accessors (isExistLabelInSystemMessage / getSystemMessageString /
+    // isExistLabelIn­StageMessage / getStageMessageString): when CapMessageLayout
+    // asks for kArchipelagoCappyLabel and we currently have a buffer ready,
+    // we substitute our own char16_t* so SMO's native bubble pipeline renders
+    // our text with no further plumbing.
+    //
+    // setCappyRsCalls is invoked from main.cpp::hkMain right after
+    // hk::ro::lookupSymbol resolves the two rs:: entry points. Until both are
+    // non-null, tryPumpCappyMessage is a no-op and queued entries accumulate
+    // (capped at kCappyQueueCap).
+    void enqueueCappyMessage(const char* utf8_text);
+    void tryPumpCappyMessage();
+    const char16_t* lookupCappyMessageSubstitution(const char* label) const;
+    using TryShowCapMessagePriorityLowFn = bool (*)(const al::IUseSceneObjHolder*, const char*, int, int);
+    using IsActiveCapMessageFn = bool (*)(const al::IUseSceneObjHolder*);
+    // STATIC because main.cpp::hkMain installs these at module init, before
+    // any ArchipelagoMode instance is created.
+    static void setCappyRsCalls(TryShowCapMessagePriorityLowFn tryShow, IsActiveCapMessageFn isActive);
+
+    // Magic label CapMessageLayout queries when our enqueue is active. Keep
+    // this distinctive — any vanilla MSBT key collision would route Nintendo's
+    // own bubbles through our substitution and corrupt them.
+    static constexpr const char* kArchipelagoCappyLabel = "ArchipelagoCappyMsg";
+
     // ===== Archipelago Utility Methods =====
     void sendStage(GameDataHolderWriter writer, const ChangeStageInfo* stageInfo);
     void sendBack();
@@ -187,6 +250,19 @@ private:
     bool mIsRecordCapture = false;
     bool mIsEntranceRandomizationEnabled = false;
     bool mIsConnectInit = false;
+
+    // ===== Talkatoo% state =====
+    // mNamedShines mirrors collectedShines' packed-bitmap shape (1 bit per
+    // uid; 148 bytes covers uid 0..1183 which is more than the apworld's
+    // current max of 1166). bridge-populated via markMoonNamed; consulted by
+    // sendMoonCheck's Talkatoo% block and by TalkatooSpeechHook's substitute
+    // path.
+    bool mTalkatooMode = false;
+    sead::SafeArray<u8, 148> mNamedShines;
+    // Consumed-on-read flag. sendMoonCheck sets this when blocking, then the
+    // existing setShineLabel pipeline picks it up via getShineReplacementText
+    // and emits "Blocked by Talkatoo!" once before clearing.
+    bool mIsTalkatooBlockedLabelPending = false;
     sead::SafeArray<int, 17> mWorldScenarios;
     bool mDying = false;
     bool mApDeath = false;
@@ -270,4 +346,49 @@ private:
 
     int mCurWorldShineList = 0;
     int mRelativeWorldCoinCollect = -1;
+
+    // ===== Cappy Messenger state =====
+    // Small circular UTF-8 queue + a single live UTF-16 buffer that
+    // CapMessageLayout reads through. tryPumpCappyMessage drives the state
+    // machine once per frame from update().
+    static constexpr u32 kCappyQueueCap = 8;
+    static constexpr u32 kCappyTextCap = 200;          // UTF-8 bytes including NUL
+    static constexpr u32 kCappyBufferWords = 200;      // char16_t words including NUL
+    // Settle gate: only pump once BOTH a frame count AND a wallclock-ms
+    // interval have elapsed since the last scene change. Both halves are
+    // load-bearing:
+    //   - Frame-only fails on Ryujinx: during save deserialization the JIT
+    //     can pause execution while wallclock keeps running, so by the time
+    //     update() resumes the frame counter is still 0 but the scene has
+    //     actually been resident for seconds — we miss the gate and pump
+    //     immediately into a half-initialized scene.
+    //   - ms-only fails on real Switch: rare paths where the scene reports
+    //     itself before any update() frames have actually run, so wallclock
+    //     elapsed is high but the scene isn't ready to draw a bubble.
+    // smo_archipelago hit both failure modes in M9; the dual gate is the
+    // shipped fix. See CappyMessenger.cpp settle-gate block for the history.
+    static constexpr u32 kCappySettleFrames = 30;
+    static constexpr s64 kCappySettleMs = 500;
+    static constexpr u32 kCappyMaxRetryFrames = 600;   // ~10 s @ 60fps
+    static constexpr s32 kCappyWaitTicks = 180;        // bubble on-screen lifetime
+    struct CappyEntry {
+        char text[kCappyTextCap];
+        bool live;
+    };
+    sead::SafeArray<CappyEntry, kCappyQueueCap> mCappyQueue;
+    u32 mCappyHead = 0;
+    u32 mCappyTail = 0;
+    u32 mCappyLiveCount = 0;
+    u32 mCappyRetryFrames = 0;
+    u32 mCappySettleFrames = 0;
+    s64 mCappySceneChangeMs = 0;
+    const al::IUseSceneObjHolder* mCappyLastScene = nullptr;
+    char16_t mCappyBuffer[kCappyBufferWords] = {};
+    bool mCappyBufferInUse = false;
+
+    // rs:: entry-point cache. Class-static so main.cpp::hkMain can populate
+    // these before any ArchipelagoMode instance exists. tryPumpCappyMessage
+    // reads them; if either is null the pump no-ops.
+    static TryShowCapMessagePriorityLowFn sTryShowCapMessage;
+    static IsActiveCapMessageFn sIsActiveCapMessage;
 };
