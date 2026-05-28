@@ -467,6 +467,12 @@ void drawMain(al::Sequence* curSequence) {
     bool isAuthorizedUser = (strcmp(currentUser, "SrDev") == 0) || (strcmp(currentUser, "Crafty") == 0) || (strcmp(currentUser, "KleinTimmi") == 0) ||
                             (strcmp(currentUser, "Katzen") == 0);
 
+    if (gmm->isMode(GameMode::ARCHIPELAGO) && gmm->getMode<ArchipelagoMode>() && !debugMode && curScene && isInGame) {
+        if (gmm->getMode<ArchipelagoMode>()->infoMenu()) {
+            return;
+        }
+    }
+
     // ===== CHAT RENDERING (Non-debug mode, in-game only) =====
     if (!debugMode && curScene && isInGame) {
         auto* renderer = hk::gfx::DebugRenderer::instance();
@@ -475,6 +481,9 @@ void drawMain(al::Sequence* curSequence) {
         float deltaTime = Time::deltaTime;
         float baseY = (dispHeight * 7.f / 10.f) + 95.f - 5.f;
         float lineHeight = 30.f;
+        if (gmm && gmm->isMode(GameMode::ARCHIPELAGO)) {
+            lineHeight = 12.f;
+        }
 
         // Update display timer and active state
         for (int i = 0; i < maxDisplayMsgCount; i++) {
@@ -509,7 +518,7 @@ void drawMain(al::Sequence* curSequence) {
         renderer->clear();
 
         if (msgCount > 0) {
-            float charWidth = 15.f;
+            float charWidth = lineHeight / 2.f;
             int maxCharCount = 0;
             for (int i = 0; i < maxDisplayMsgCount; i++) {
                 if (displayMessages[i].active) {
@@ -542,7 +551,7 @@ void drawMain(al::Sequence* curSequence) {
                 u32 coloru32 = hk::gfx::rgba(color.a, color.g, color.b, color.a);
                 u8 shadowAlpha = fmax(0.0f, color.a - 25);
                 u32 shadowColor = hk::gfx::rgba(0, 0, 0, shadowAlpha);
-                renderer->setGlyphHeight(30.f);
+                renderer->setGlyphHeight(lineHeight);
 
                 renderer->drawString(shadowPos, displayMessages[i].text.cstr(), shadowColor);
 
@@ -585,12 +594,6 @@ void drawMain(al::Sequence* curSequence) {
             chatInput[0] = '\0';  // Clear the input
         }
         ImGui::End();
-    }
-
-    if (gmm->isMode(GameMode::ARCHIPELAGO) && !debugMode) {
-        if (gmm->getMode<ArchipelagoMode>()) {
-            gmm->getMode<ArchipelagoMode>()->infoMenu();
-        }
     }
 
     // ===== NON-DEBUG MODE EXIT =====

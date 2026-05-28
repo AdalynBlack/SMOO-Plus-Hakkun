@@ -1207,7 +1207,7 @@ void Client::updateArchipelagoShines(GameDataHolderAccessor accessor, int shineI
                     stageShine->makeActorAlive();
                 }
 
-                stageShine->onSwitchGet();
+                // stageShine->onSwitchGet();
             }
 
             GameDataHolderAccessor(accessor)->getGameDataFile()->setGotShine(shineInfo);
