@@ -895,3 +895,49 @@ _ZNK11TalkMessage22getSelectedChoiceIndexEv
 
 _ZN17CommonSelectParts9exeSelectEv
 _ZN17CommonSelectParts9exeDecideEv
+
+// ===== Talkatoo% mode =====
+// Speech-bubble substitution at the message-resolve chokepoint. Talkatoo's
+// Poetter::exeWait composes its bubble text by calling tryFindShineMessage
+// with (self, sceneObjHolder, world_id, shine_index). We trampoline this
+// and, when the caller is a Poetter (vtable filter via _ZTV7Poetter),
+// return a pointer to our own UTF-16 buffer holding an AP-pool moon name.
+_ZN16GameDataFunction19tryFindShineMessageEPKN2al9LiveActorEPKNS0_17IUseMessageSystemEii
+
+// Poetter primary vtable. Read at install time via hk::ro::lookupSymbol to
+// scope the substitute hook to Talkatoo only — tryFindShineMessage is also
+// called from cutscenes, the pause menu, and AchievementHint.
+_ZTV7Poetter
+
+// Pause-menu Power Moon list "name revealed?" getter. Talkatoo% mode
+// force-falses this so rs::calcShineIndexTableNameAvailable's picker never
+// exhausts. See ArchipelagoMode::getTalkatooMode + hooksArchipelago.hpp for
+// the rationale.
+_ZNK12GameDataFile15isOpenShineNameEii
+
+// Talkatoo's vanilla "name revealed" setter. Pass-through in Talkatoo%
+// mode (kept hooked for observability — we log on the first hit so we know
+// non-Talkatoo paths like Achievement reveals exist).
+_ZN12GameDataFile18tryUnlockShineNameEii
+
+// (world_id, idx) -> HintInfo* helper. Reserved for menu-mark hooks that
+// want to translate the menu's positional index back to a shine_uid.
+_ZNK12GameDataFile9findShineEii
+
+// ===== Cappy Messenger — in-game speech-bubble notifications =====
+// Four trampolines on al's per-mstxt-file accessors. CapMessageLayout::exeDelay
+// dispatches through either the System or Stage variant depending on
+// CapMessageShowInfo::isStageMessage; we intercept all four so the same
+// magic-label trick works regardless of which side picks it up.
+//
+// (_ZN2al22getSystemMessageStringE... is already in dynsym above; the other
+//  three are new.)
+_ZN2al27isExistLabelInSystemMessageEPKNS_17IUseMessageSystemEPKcS4_
+_ZN2al26isExistLabelInStageMessageEPKNS_17IUseMessageSystemEPKcS4_
+_ZN2al21getStageMessageStringEPKNS_17IUseMessageSystemEPKcS4_
+
+// rs:: Cappy-speech entry points. Resolved via hk::ro::lookupSymbol and
+// called through function pointers (we don't trampoline them — we're the
+// caller, not the callee).
+_ZN2rs28tryShowCapMessagePriorityLowEPKN2al18IUseSceneObjHolderEPKcii
+_ZN2rs18isActiveCapMessageEPKN2al18IUseSceneObjHolderE
