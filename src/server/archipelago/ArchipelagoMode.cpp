@@ -577,12 +577,14 @@ void ArchipelagoMode::clearNamedMoons() {
 }
 
 bool ArchipelagoMode::isMoonNamed(int uid) const {
-    if (uid < 0 || uid / 8 >= static_cast<int>(mNamedShines.size())) return false;
+    if (uid < 0 || uid / 8 >= static_cast<int>(mNamedShines.size()))
+        return false;
     return (mNamedShines[uid / 8] & (1 << (uid % 8))) != 0;
 }
 
 bool ArchipelagoMode::chooseTalkatooSpokenUtf8(int /*world_id*/, int index, char* out, u32 out_cap) {
-    if (!mTalkatooMode || !out || out_cap < 16) return false;
+    if (!mTalkatooMode || !out || out_cap < 16)
+        return false;
 
     // STUB rotation. The vanilla picker passes a stable `index` per visit
     // when its pool is non-empty; we cycle through three probe strings so
@@ -1544,7 +1546,8 @@ namespace {
 // (covers the BMP, which is all MessageFont38 can render anyway). Returns
 // the number of char16_t words written excluding the trailing NUL.
 u32 cappyUtf8ToUtf16(const char* src, char16_t* out, u32 out_cap) {
-    if (out_cap == 0 || out == nullptr || src == nullptr) return 0;
+    if (out_cap == 0 || out == nullptr || src == nullptr)
+        return 0;
     u32 i = 0;
     u32 o = 0;
     while (src[i] != '\0' && o + 1 < out_cap) {
@@ -1579,14 +1582,14 @@ s64 cappyNowMs() {
 }  // namespace
 
 void ArchipelagoMode::enqueueCappyMessage(const char* utf8_text) {
-    if (!utf8_text || utf8_text[0] == '\0') return;
+    if (!utf8_text || utf8_text[0] == '\0')
+        return;
     if (mCappyLiveCount >= kCappyQueueCap) {
         // Drop newest. Matches smo_archipelago CappyMessenger behavior — the
         // dropped item is recent (likely a stale notification from a bulk
         // replay) and queued items are older and more representative of what
         // the player has been waiting on.
-        Logger::log("[cappy] queue full (cap=%u) — dropping '%s'\n",
-                    static_cast<unsigned>(kCappyQueueCap), utf8_text);
+        Logger::log("[cappy] queue full (cap=%u) — dropping '%s'\n", static_cast<unsigned>(kCappyQueueCap), utf8_text);
         return;
     }
     CappyEntry& e = mCappyQueue[mCappyTail];
@@ -1604,16 +1607,15 @@ void ArchipelagoMode::enqueueCappyMessage(const char* utf8_text) {
 
 // Class-static rs:: entry-point cache definitions. See header comment.
 ArchipelagoMode::TryShowCapMessagePriorityLowFn ArchipelagoMode::sTryShowCapMessage = nullptr;
-ArchipelagoMode::IsActiveCapMessageFn           ArchipelagoMode::sIsActiveCapMessage = nullptr;
+ArchipelagoMode::IsActiveCapMessageFn ArchipelagoMode::sIsActiveCapMessage = nullptr;
 
-void ArchipelagoMode::setCappyRsCalls(TryShowCapMessagePriorityLowFn tryShow,
-                                      IsActiveCapMessageFn isActive) {
+void ArchipelagoMode::setCappyRsCalls(TryShowCapMessagePriorityLowFn tryShow, IsActiveCapMessageFn isActive) {
     sTryShowCapMessage = tryShow;
     sIsActiveCapMessage = isActive;
 }
 
 void ArchipelagoMode::tryPumpCappyMessage() {
-    const al::IUseSceneObjHolder* scene = mSceneObjHolder;
+    const al::IUseSceneObjHolder* scene = (IUseSceneObjHolder*)mSceneObjHolder;
 
     // Scene-stability bookkeeping. Reset BOTH counters whenever
     // mSceneObjHolder changes; bump frames each tick the scene is stable.
@@ -1630,24 +1632,29 @@ void ArchipelagoMode::tryPumpCappyMessage() {
         ++mCappySettleFrames;
     }
 
-    if (mCappyLiveCount == 0) return;
-    if (!scene) return;
-    if (!sTryShowCapMessage || !sIsActiveCapMessage) return;
+    if (mCappyLiveCount == 0)
+        return;
+    if (!scene)
+        return;
+    if (!sTryShowCapMessage || !sIsActiveCapMessage)
+        return;
 
     // Dual settle gate: both halves must pass. See header for the rationale
     // (frame-only fails on Ryujinx during save load; ms-only fails on real
     // Switch when scene resolves before any frame runs).
     {
-        const s64 elapsedMs = mCappySceneChangeMs == 0
-            ? 0 : cappyNowMs() - mCappySceneChangeMs;
-        if (mCappySettleFrames < kCappySettleFrames) return;
-        if (elapsedMs < kCappySettleMs) return;
+        const s64 elapsedMs = mCappySceneChangeMs == 0 ? 0 : cappyNowMs() - mCappySceneChangeMs;
+        if (mCappySettleFrames < kCappySettleFrames)
+            return;
+        if (elapsedMs < kCappySettleMs)
+            return;
     }
 
     // If our buffer is still live, wait for Nintendo's bubble pipeline to
     // finish reading it before releasing.
     if (mCappyBufferInUse) {
-        if (sIsActiveCapMessage(scene)) return;
+        if (sIsActiveCapMessage(scene))
+            return;
         mCappyBufferInUse = false;
     }
 
@@ -1658,9 +1665,7 @@ void ArchipelagoMode::tryPumpCappyMessage() {
     if (sIsActiveCapMessage(scene)) {
         ++mCappyRetryFrames;
         if (mCappyRetryFrames >= kCappyMaxRetryFrames) {
-            Logger::log("[cappy] dropping head after %u frames (text='%s')\n",
-                        static_cast<unsigned>(mCappyRetryFrames),
-                        mCappyQueue[mCappyHead].text);
+            Logger::log("[cappy] dropping head after %u frames (text='%s')\n", static_cast<unsigned>(mCappyRetryFrames), mCappyQueue[mCappyHead].text);
             mCappyQueue[mCappyHead].live = false;
             mCappyHead = (mCappyHead + 1) % kCappyQueueCap;
             --mCappyLiveCount;
@@ -1673,8 +1678,7 @@ void ArchipelagoMode::tryPumpCappyMessage() {
     CappyEntry& e = mCappyQueue[mCappyHead];
     const u32 written = cappyUtf8ToUtf16(e.text, mCappyBuffer, kCappyBufferWords);
     if (written == 0 && e.text[0] != '\0') {
-        Logger::log("[cappy] utf8->utf16 produced empty buffer for '%s' — dropping head\n",
-                    e.text);
+        Logger::log("[cappy] utf8->utf16 produced empty buffer for '%s' — dropping head\n", e.text);
         mCappyQueue[mCappyHead].live = false;
         mCappyHead = (mCappyHead + 1) % kCappyQueueCap;
         --mCappyLiveCount;
@@ -1694,8 +1698,7 @@ void ArchipelagoMode::tryPumpCappyMessage() {
         mCappyBufferInUse = false;
         ++mCappyRetryFrames;
         if (mCappyRetryFrames >= kCappyMaxRetryFrames) {
-            Logger::log("[cappy] dropping head after %u tryShow refusals (text='%s')\n",
-                        static_cast<unsigned>(mCappyRetryFrames),
+            Logger::log("[cappy] dropping head after %u tryShow refusals (text='%s')\n", static_cast<unsigned>(mCappyRetryFrames),
                         mCappyQueue[mCappyHead].text);
             mCappyQueue[mCappyHead].live = false;
             mCappyHead = (mCappyHead + 1) % kCappyQueueCap;
@@ -1715,11 +1718,15 @@ void ArchipelagoMode::tryPumpCappyMessage() {
 }
 
 const char16_t* ArchipelagoMode::lookupCappyMessageSubstitution(const char* label) const {
-    if (!label) return nullptr;
+    if (!label)
+        return nullptr;
     // Cheap-first: vast majority of MSBT lookups are not for our label.
     // kArchipelagoCappyLabel starts with 'A'.
-    if (label[0] != 'A') return nullptr;
-    if (strcmp(label, kArchipelagoCappyLabel) != 0) return nullptr;
-    if (!mCappyBufferInUse) return nullptr;
+    if (label[0] != 'A')
+        return nullptr;
+    if (strcmp(label, kArchipelagoCappyLabel) != 0)
+        return nullptr;
+    if (!mCappyBufferInUse)
+        return nullptr;
     return mCappyBuffer;
 }

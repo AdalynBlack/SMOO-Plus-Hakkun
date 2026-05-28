@@ -714,38 +714,36 @@ static const char16_t* asciiToUtf16BufStatic(const char* src) {
 // Treats g_poetterVtableAddr == 0 as "not a Poetter" so an install-time
 // lookup failure degrades to vanilla speech instead of crashing.
 static bool actorIsPoetter(const void* actor) {
-    if (!actor || g_poetterVtableAddr == 0) return false;
+    if (!actor || g_poetterVtableAddr == 0)
+        return false;
     const uintptr_t vptr = *reinterpret_cast<const uintptr_t*>(actor);
-    return vptr >= g_poetterVtableAddr
-        && vptr <  g_poetterVtableAddr + kPoetterVtableSpan;
+    return vptr >= g_poetterVtableAddr && vptr < g_poetterVtableAddr + kPoetterVtableSpan;
 }
 
 }  // namespace TalkatooHook
 
-static HkTrampoline<const char16_t*, const al::LiveActor*, const al::IUseMessageSystem*, int, int>
-    tryFindShineMessageHook = hk::hook::trampoline(
-        [](const al::LiveActor* actor, const al::IUseMessageSystem* sys,
-           int worldId, int index) -> const char16_t* {
-            const char16_t* vanilla = tryFindShineMessageHook.orig(actor, sys, worldId, index);
+static HkTrampoline<const char16_t*, const al::LiveActor*, const al::IUseMessageSystem*, int, int> tryFindShineMessageHook =
+    hk::hook::trampoline([](const al::LiveActor* actor, const al::IUseMessageSystem* sys, int worldId, int index) -> const char16_t* {
+        const char16_t* vanilla = tryFindShineMessageHook.orig(actor, sys, worldId, index);
 
-            if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-                return vanilla;
-            }
-            if (!TalkatooHook::actorIsPoetter(actor)) {
-                return vanilla;
-            }
+        if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+            return vanilla;
+        }
+        if (!TalkatooHook::actorIsPoetter(actor)) {
+            return vanilla;
+        }
 
-            ArchipelagoMode* apMode = GameModeManager::instance()->getMode<ArchipelagoMode>();
-            if (!apMode->getTalkatooMode()) {
-                return vanilla;
-            }
+        ArchipelagoMode* apMode = GameModeManager::instance()->getMode<ArchipelagoMode>();
+        if (!apMode->getTalkatooMode()) {
+            return vanilla;
+        }
 
-            char ascii[64];
-            if (!apMode->chooseTalkatooSpokenUtf8(worldId, index, ascii, sizeof(ascii))) {
-                return vanilla;
-            }
-            return TalkatooHook::asciiToUtf16BufStatic(ascii);
-        });
+        char ascii[64];
+        if (!apMode->chooseTalkatooSpokenUtf8(worldId, index, ascii, sizeof(ascii))) {
+            return vanilla;
+        }
+        return TalkatooHook::asciiToUtf16BufStatic(ascii);
+    });
 
 // ----- Talkatoo% picker non-exhaustion -----
 //
@@ -762,38 +760,35 @@ static HkTrampoline<const char16_t*, const al::LiveActor*, const al::IUseMessage
 // unmarked). Achievement-hint reveals also re-show next session. Both
 // regressions are accepted to keep the picker non-exhausting.
 
-static HkTrampoline<bool, const GameDataFile*, int, int>
-    isOpenShineNameHook = hk::hook::trampoline(
-        [](const GameDataFile* self, int worldId, int index) -> bool {
-            if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-                return isOpenShineNameHook.orig(self, worldId, index);
-            }
-            if (!GameModeManager::instance()->getMode<ArchipelagoMode>()->getTalkatooMode()) {
-                return isOpenShineNameHook.orig(self, worldId, index);
-            }
-            // Talkatoo% mode ON: force false so the picker pool stays full.
-            return false;
-        });
+static HkTrampoline<bool, const GameDataFile*, int, int> isOpenShineNameHook =
+    hk::hook::trampoline([](const GameDataFile* self, int worldId, int index) -> bool {
+        if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+            return isOpenShineNameHook.orig(self, worldId, index);
+        }
+        if (!GameModeManager::instance()->getMode<ArchipelagoMode>()->getTalkatooMode()) {
+            return isOpenShineNameHook.orig(self, worldId, index);
+        }
+        // Talkatoo% mode ON: force false so the picker pool stays full.
+        return false;
+    });
 
 // Pass-through trampoline on GameDataFile::tryUnlockShineName. Kept hooked
 // for observability only — log the first hit per session so we can confirm
 // non-Talkatoo callers (Achievement reveal, Hint-Toad) exist in this build
 // of SMO. Vanilla logic runs unchanged.
-static HkTrampoline<bool, GameDataFile*, int, int>
-    tryUnlockShineNameHook = hk::hook::trampoline(
-        [](GameDataFile* self, int worldId, int index) -> bool {
-            static bool s_loggedFirst = false;
-            if (!s_loggedFirst) {
-                s_loggedFirst = true;
-                sead::FixedSafeString<80> str;
-                str = "[talkatoo] first tryUnlockShineName world=";
-                str.append(intToCstr(worldId));
-                str.append(" idx=");
-                str.append(intToCstr(index));
-                Client::addMessage(str.cstr());
-            }
-            return tryUnlockShineNameHook.orig(self, worldId, index);
-        });
+static HkTrampoline<bool, GameDataFile*, int, int> tryUnlockShineNameHook = hk::hook::trampoline([](GameDataFile* self, int worldId, int index) -> bool {
+    static bool s_loggedFirst = false;
+    if (!s_loggedFirst) {
+        s_loggedFirst = true;
+        sead::FixedSafeString<80> str;
+        str = "[talkatoo] first tryUnlockShineName world=";
+        str.append(intToCstr(worldId));
+        str.append(" idx=");
+        str.append(intToCstr(index));
+        Client::addMessage(str.cstr());
+    }
+    return tryUnlockShineNameHook.orig(self, worldId, index);
+});
 
 // ----- Cappy Messenger: text-system intercept -----
 //
@@ -807,48 +802,42 @@ static HkTrampoline<bool, GameDataFile*, int, int>
 // the System path but defensive hooking of both costs little and protects
 // against future code that uses the Stage path.
 
-static HkTrampoline<bool, const al::IUseMessageSystem*, const char*, const char*>
-    isExistLabelInSystemMessageHook = hk::hook::trampoline(
-        [](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> bool {
-            if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-                if (GameModeManager::instance()->getMode<ArchipelagoMode>()
-                        ->lookupCappyMessageSubstitution(label) != nullptr) {
-                    return true;
-                }
+static HkTrampoline<bool, const al::IUseMessageSystem*, const char*, const char*> isExistLabelInSystemMessageHook =
+    hk::hook::trampoline([](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> bool {
+        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+            if (GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label) != nullptr) {
+                return true;
             }
-            return isExistLabelInSystemMessageHook.orig(sys, mstxt, label);
-        });
+        }
+        return isExistLabelInSystemMessageHook.orig(sys, mstxt, label);
+    });
 
-static HkTrampoline<const char16_t*, const al::IUseMessageSystem*, const char*, const char*>
-    getSystemMessageStringTrampolineHook = hk::hook::trampoline(
-        [](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> const char16_t* {
-            if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-                const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()
-                    ->lookupCappyMessageSubstitution(label);
-                if (sub) return sub;
-            }
-            return getSystemMessageStringTrampolineHook.orig(sys, mstxt, label);
-        });
+static HkTrampoline<const char16_t*, const al::IUseMessageSystem*, const char*, const char*> getSystemMessageStringTrampolineHook =
+    hk::hook::trampoline([](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> const char16_t* {
+        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+            const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label);
+            if (sub)
+                return sub;
+        }
+        return getSystemMessageStringTrampolineHook.orig(sys, mstxt, label);
+    });
 
-static HkTrampoline<bool, const al::IUseMessageSystem*, const char*, const char*>
-    isExistLabelInStageMessageHook = hk::hook::trampoline(
-        [](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> bool {
-            if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-                if (GameModeManager::instance()->getMode<ArchipelagoMode>()
-                        ->lookupCappyMessageSubstitution(label) != nullptr) {
-                    return true;
-                }
+static HkTrampoline<bool, const al::IUseMessageSystem*, const char*, const char*> isExistLabelInStageMessageHook =
+    hk::hook::trampoline([](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> bool {
+        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+            if (GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label) != nullptr) {
+                return true;
             }
-            return isExistLabelInStageMessageHook.orig(sys, mstxt, label);
-        });
+        }
+        return isExistLabelInStageMessageHook.orig(sys, mstxt, label);
+    });
 
-static HkTrampoline<const char16_t*, const al::IUseMessageSystem*, const char*, const char*>
-    getStageMessageStringHook = hk::hook::trampoline(
-        [](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> const char16_t* {
-            if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-                const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()
-                    ->lookupCappyMessageSubstitution(label);
-                if (sub) return sub;
-            }
-            return getStageMessageStringHook.orig(sys, mstxt, label);
-        });
+static HkTrampoline<const char16_t*, const al::IUseMessageSystem*, const char*, const char*> getStageMessageStringHook =
+    hk::hook::trampoline([](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> const char16_t* {
+        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+            const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label);
+            if (sub)
+                return sub;
+        }
+        return getStageMessageStringHook.orig(sys, mstxt, label);
+    });

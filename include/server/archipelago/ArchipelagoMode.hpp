@@ -364,8 +364,8 @@ private:
     // CapMessageLayout reads through. tryPumpCappyMessage drives the state
     // machine once per frame from update().
     static constexpr u32 kCappyQueueCap = 8;
-    static constexpr u32 kCappyTextCap = 200;          // UTF-8 bytes including NUL
-    static constexpr u32 kCappyBufferWords = 200;      // char16_t words including NUL
+    static constexpr u32 kCappyTextCap = 200;      // UTF-8 bytes including NUL
+    static constexpr u32 kCappyBufferWords = 200;  // char16_t words including NUL
     // Settle gate: only pump once BOTH a frame count AND a wallclock-ms
     // interval have elapsed since the last scene change. Both halves are
     // load-bearing:
@@ -381,8 +381,8 @@ private:
     // shipped fix. See CappyMessenger.cpp settle-gate block for the history.
     static constexpr u32 kCappySettleFrames = 30;
     static constexpr s64 kCappySettleMs = 500;
-    static constexpr u32 kCappyMaxRetryFrames = 600;   // ~10 s @ 60fps
-    static constexpr s32 kCappyWaitTicks = 180;        // bubble on-screen lifetime
+    static constexpr u32 kCappyMaxRetryFrames = 600;  // ~10 s @ 60fps
+    static constexpr s32 kCappyWaitTicks = 180;       // bubble on-screen lifetime
     struct CappyEntry {
         char text[kCappyTextCap];
         bool live;
