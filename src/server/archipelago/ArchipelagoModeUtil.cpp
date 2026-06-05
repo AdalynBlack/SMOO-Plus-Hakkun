@@ -357,3 +357,25 @@ int ArchipelagoMode::getRelativeWorldCoinCollectCheckGotNum(GameDataHolderAccess
 
     return regionalCoinCheckGotNum - 1;
 }
+
+void ArchipelagoMode::calculateShineScenarios() {
+    for (int i = 0; i < 14; i++) {
+        if (hasShine(shineScenarios[i].shineUid)) {
+            setScenario(shineScenarios[i].worldId, shineScenarios[i].scenario);
+        }
+    }
+}
+
+int ArchipelagoMode::getSubAreaScenario(const char* toStageName) {
+    int toScenario = -1;
+    if (al::isEqualString(toStageName, "ForestWorldBossStage"))
+        toScenario = getScenario(GameDataFunction::getWorldIndexForest()) > 2 ? 2 : 1;
+
+    if (al::isEqualString(toStageName, "ForestWorldWoodsStage"))
+        toScenario = getScenario(GameDataFunction::getWorldIndexForest()) > 1 ? 2 : 1;
+
+    if (al::isEqualString(toStageName, "CapWorldTowerStage"))
+        toScenario = 2;
+
+    return toScenario;
+}

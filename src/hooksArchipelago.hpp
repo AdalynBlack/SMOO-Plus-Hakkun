@@ -23,6 +23,7 @@
 #include "game/System/GameDataHolder.h"
 #include "game/System/GameDataUtil.h"
 #include "game/System/GameProgressData.h"
+#include "game/Util/ClothUtil.h"
 #include "game/Util/ItemUtil.h"
 #include "game/Util/StageLayoutFunction.h"
 
@@ -248,12 +249,12 @@ static void buyItemHook(GameDataFile* file, const ShopItem::ItemInfo* itemInfo, 
     }
 }
 
-static bool isBuyItems(ShopItem::ItemInfo* itemInfo) {
+static bool isBuyItemHook(GameDataHolderAccessor accessor, ShopItem::ItemInfo* itemInfo) {
     // Add a collected outfits, gifts, stickers based implementation similar to shinechecks
     if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
         return GameModeManager::instance()->getMode<ArchipelagoMode>()->hasItem(itemInfo);
     } else {
-        return Client::get()->getHolder()->getGameDataFile()->isBuyItem(itemInfo);
+        return rs::isBuyItem(accessor, itemInfo);
     }
 }
 

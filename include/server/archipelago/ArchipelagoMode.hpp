@@ -228,6 +228,8 @@ public:
     void updateCounter(PlayerActorBase* playerBase, GameDataHolderAccessor accessor);
     bool infoMenu();
     int getRelativeWorldCoinCollectCheckGotNum(GameDataHolderAccessor accessor);
+    void calculateShineScenarios();
+    int getSubAreaScenario(const char* toStageName);
 
 private:
     al::WipeHolder* mWipeHolder = nullptr;  // Pointer set by setWipeHolder on first step of hakoniwaSequence hook
@@ -302,7 +304,7 @@ private:
     sead::SafeArray<u8, 7> mCollectedCaptures;
     sead::SafeArray<u8, 7> mCheckedCaptures;
 
-    // List of 7 u8s for tracking which captures have been grabbed
+    // List of 7 u8s for tracking which captures have been grabbed l trailing byte buffer
     sead::SafeArray<u8, 126> mCollectedRegionals;
 
     // List of 3 u8s for tracking which moon rocks have been collected
@@ -336,6 +338,8 @@ private:
     // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 72> mSlotNames;
     // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 72> mItemNames;
 
+    int lastShopMoonReplaceIndex = -1;
+
     int numApGames = 0;
     int numApSlots = 0;
     int numApItems = 0;
@@ -353,6 +357,9 @@ private:
 
     sead::FixedSafeString<128> mLastERStageId;
     sead::FixedSafeString<128> mLastERStageName;
+
+    sead::FixedSafeString<128> mLastExitStageId;
+    sead::FixedSafeString<128> mLastExitStageName;
 
     sead::PtrArray<Shine> mStoryShineArray;
 

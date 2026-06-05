@@ -101,8 +101,10 @@ void ArchipelagoMode::init(const GameModeInitInfo& info) {
 
         mLastERStageId = sead::FixedSafeString<128>();
         mLastERStageName = sead::FixedSafeString<128>();
+        mLastExitStageId = sead::FixedSafeString<128>();
+        mLastExitStageName = sead::FixedSafeString<128>();
 
-        mStoryShineArray.allocBuffer(10, nullptr);  // max of 100 shine actors in buffer
+        mStoryShineArray.allocBuffer(10, nullptr);  // max of 10 shine actors in buffer to account for story moons and multi moons
     }
 
     Logger::log("Scene Heap Free Size: %f/%f\n", al::getSceneHeap()->getFreeSize() * 0.001f, al::getSceneHeap()->getSize() * 0.001f);
@@ -209,7 +211,6 @@ void ArchipelagoMode::end() {
     pause();
 
     mCurScene->stageSceneLayout->start();
-    // ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
     if (!GameModeManager::instance()->isPaused()) {
     }
 
@@ -264,6 +265,9 @@ ChangeStageInfo* ArchipelagoMode::handleER(const ChangeStageInfo* info) {
 
     sead::FixedSafeString<64> stageId = sead::FixedSafeString<64>();
     stageId = info->getChangeStageId();
+
+    mLastExitStageId = stageId.cstr();
+    mLastExitStageName = GameDataFunction::getCurrentStageName(accessor);
 
     // Gets custom stageIds added by Archipelago based on kingdom to prevent duplicates
     getCustomStageId(accessor, info, &stageId);
@@ -320,7 +324,9 @@ ChangeStageInfo* ArchipelagoMode::handleER(const ChangeStageInfo* info) {
     // Prevents need to change stageIds in game files.
     correctCustomStageId(&toStageId);
 
-    int toScenario = isPartOf(toStageName.cstr(), "WorldHomeStage") ? getScenario(toStageName.cstr()) : -1;
+    // Add GetSubAreaScenario function for scenario dependent sub areas
+    // like top hat tower and wooded boss arena, and deep woods
+    int toScenario = isPartOf(toStageName.cstr(), "WorldHomeStage") ? getScenario(toStageName.cstr()) : getSubAreaScenario(toStageName.cstr());
 
     setRelativeWorldCoinCollect(toStageName.cstr());
 
@@ -1055,6 +1061,20 @@ const char* ArchipelagoMode::getShineReplacementText() {
 
     GameDataHolderAccessor accessor(mCurScene);
 
+    if (isPartOf(GameDataFunction::getCurrentStageName(accessor), "WorldShop")) {
+        sead::WFixedSafeString<128> wideShineName = sead::WFixedSafeString<128>();
+        wideShineName = mSlotNames[shopMoonTextReplacements[lastShopMoonReplaceIndex].slotIndex].cstr();
+        wideShineName.append(u" ");
+        wideShineName.append(mItemNames[shopMoonTextReplacements[lastShopMoonReplaceIndex].apItemNameIndex].cstr());
+        sead::FixedSafeString<128> shineName = sead::FixedSafeString<128>();
+
+        for (int i = 0; i < wideShineName.calcLength(); i++) {
+            shineName.append(static_cast<char>(wideShineName[i]));
+        }
+
+        return shineName.cstr();
+    }
+
     shineReplaceText curReplaceText;
 
     if (mRecentShineHintIndex > 99) {
@@ -1204,7 +1224,8 @@ const char16_t* ArchipelagoMode::getShopReplacementText(const char* fileName, co
         curItem = shopGiftTextReplacements[getIndexSouvenirList(convert.cstr())];
     } else if (strcmp("ItemMoon", fileName) == 0) {
         // Find out key for each kingdom as still is unknown
-        curItem = shopMoonTextReplacements[getIndexMoonItemList(convert.cstr())];
+        lastShopMoonReplaceIndex = getIndexMoonItemList(convert.cstr());
+        curItem = shopMoonTextReplacements[lastShopMoonReplaceIndex];
     } else {
         // Not included items like Life Up Hearts
         return u"";

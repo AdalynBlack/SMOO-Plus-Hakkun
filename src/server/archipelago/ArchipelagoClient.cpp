@@ -514,6 +514,7 @@ void Client::updateSentChecks(SentChecks* packet) {
             archipelago->addShine(packet->shineUid97);
             archipelago->addShine(packet->shineUid98);
             archipelago->addShine(packet->shineUid99);
+            archipelago->calculateShineScenarios();
         }
         if (packet->checkType == CheckType::RegionalCoin) {
             archipelago->addRegionalCoin(packet->shineUid0);

@@ -980,7 +980,7 @@ extern "C" void hkMain() {
     hk::hook::writeBranchLinkAtMainOffset(0x512AE8, onNewGameDemoStart);  // Intro demo start
     hk::hook::writeBranchLinkAtMainOffset(0x50FED4, onUnlockLost);        // Beat Bowser in Cloud Check
     hk::hook::writeBranchLinkAtMainOffset(0x4C54A4, onCreditsStart);      // Beat the Game Check
-    hk::hook::writeBranchLinkAtMainOffset(0x54C3A0, isBuyItems);          // Shop bought items
+    hk::hook::writeBranchLinkAtMainOffset(0x209844, isBuyItemHook);       // Shop bought items old  0x54C3A0
     hk::hook::writeBranchLinkAtMainOffset(0x38C408, skipHackCutscene);    // Skip frog cutscene
     hk::hook::writeBranchAtMainOffset(0x56CC70, canEndHack);              // Fix uncapture crash
 
@@ -1111,64 +1111,64 @@ extern "C" void hkMain() {
     // isGotCoinCollectHook.installAtSym<"_ZNK12GameDataFile16isGotCoinCollectEPKN2al11PlacementIdE">();
     // hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x313334);
 
-    // ===== Talkatoo% mode hooks =====
-    // Three trampolines + one data-symbol lookup. All inert when
-    // ArchipelagoMode::getTalkatooMode() is false (toggled by the server
-    // side via setTalkatooMode). Symbols catalogued in syms/main.sym.
+    // // ===== Talkatoo% mode hooks =====
+    // // Three trampolines + one data-symbol lookup. All inert when
+    // // ArchipelagoMode::getTalkatooMode() is false (toggled by the server
+    // // side via setTalkatooMode). Symbols catalogued in syms/main.sym.
 
-    // Resolve Poetter's vtable address so the substitute hook can scope to
-    // Talkatoo callers only. A failure here leaves the trampoline installed
-    // but inert (substitute returns vanilla for every caller because
-    // actorIsPoetter returns false) — graceful degradation on a hypothetical
-    // future SMO patch that renames the class.
-    {
-        const ptr vt = hk::ro::lookupSymbol("_ZTV7Poetter");
-        if (vt == 0) {
-            Logger::log("[talkatoo] lookupSymbol _ZTV7Poetter FAILED — substitute hook inert\n");
-        } else {
-            TalkatooHook::g_poetterVtableAddr = static_cast<uintptr_t>(vt);
-            Logger::log("[talkatoo] Poetter vtable @ 0x%lx\n", static_cast<unsigned long>(vt));
-        }
-    }
-    tryFindShineMessageHook.installAtSym<"_ZN16GameDataFunction19tryFindShineMessageEPKN2al9LiveActorEPKNS0_17IUseMessageSystemEii">();
-    isOpenShineNameHook.installAtSym<"_ZNK12GameDataFile15isOpenShineNameEii">();
-    tryUnlockShineNameHook.installAtSym<"_ZN12GameDataFile18tryUnlockShineNameEii">();
+    // // Resolve Poetter's vtable address so the substitute hook can scope to
+    // // Talkatoo callers only. A failure here leaves the trampoline installed
+    // // but inert (substitute returns vanilla for every caller because
+    // // actorIsPoetter returns false) — graceful degradation on a hypothetical
+    // // future SMO patch that renames the class.
+    // {
+    //     const ptr vt = hk::ro::lookupSymbol("_ZTV7Poetter");
+    //     if (vt == 0) {
+    //         Logger::log("[talkatoo] lookupSymbol _ZTV7Poetter FAILED — substitute hook inert\n");
+    //     } else {
+    //         TalkatooHook::g_poetterVtableAddr = static_cast<uintptr_t>(vt);
+    //         Logger::log("[talkatoo] Poetter vtable @ 0x%lx\n", static_cast<unsigned long>(vt));
+    //     }
+    // }
+    // tryFindShineMessageHook.installAtSym<"_ZN16GameDataFunction19tryFindShineMessageEPKN2al9LiveActorEPKNS0_17IUseMessageSystemEii">();
+    // isOpenShineNameHook.installAtSym<"_ZNK12GameDataFile15isOpenShineNameEii">();
+    // tryUnlockShineNameHook.installAtSym<"_ZN12GameDataFile18tryUnlockShineNameEii">();
 
-    // ===== Cappy Messenger hooks =====
-    // Four trampolines on the per-mstxt message accessors (one System hook
-    // and one Stage hook for each of isExistLabel + getString). The hooks
-    // synthesize the kArchipelagoCappyLabel lookup against ArchipelagoMode's
-    // currently-live UTF-16 buffer. Inert unless enqueueCappyMessage has
-    // pushed at least one entry AND setCappyRsCalls below succeeded.
-    //
-    // CAVEAT: the existing shop-text BL replacements at 0x2089C4 / 0x208A44
-    // route through getShopItemMessage (which falls back to
-    // al::getSystemMessageString). The function-level trampoline below
-    // intercepts the fallback too — which is fine because non-Cappy labels
-    // pass through to Orig unchanged.
-    isExistLabelInSystemMessageHook.installAtSym<"_ZN2al27isExistLabelInSystemMessageEPKNS_17IUseMessageSystemEPKcS4_">();
-    getSystemMessageStringTrampolineHook.installAtSym<"_ZN2al22getSystemMessageStringEPKNS_17IUseMessageSystemEPKcS4_">();
-    isExistLabelInStageMessageHook.installAtSym<"_ZN2al26isExistLabelInStageMessageEPKNS_17IUseMessageSystemEPKcS4_">();
-    getStageMessageStringHook.installAtSym<"_ZN2al21getStageMessageStringEPKNS_17IUseMessageSystemEPKcS4_">();
+    // // ===== Cappy Messenger hooks =====
+    // // Four trampolines on the per-mstxt message accessors (one System hook
+    // // and one Stage hook for each of isExistLabel + getString). The hooks
+    // // synthesize the kArchipelagoCappyLabel lookup against ArchipelagoMode's
+    // // currently-live UTF-16 buffer. Inert unless enqueueCappyMessage has
+    // // pushed at least one entry AND setCappyRsCalls below succeeded.
+    // //
+    // // CAVEAT: the existing shop-text BL replacements at 0x2089C4 / 0x208A44
+    // // route through getShopItemMessage (which falls back to
+    // // al::getSystemMessageString). The function-level trampoline below
+    // // intercepts the fallback too — which is fine because non-Cappy labels
+    // // pass through to Orig unchanged.
+    // isExistLabelInSystemMessageHook.installAtSym<"_ZN2al27isExistLabelInSystemMessageEPKNS_17IUseMessageSystemEPKcS4_">();
+    // getSystemMessageStringTrampolineHook.installAtSym<"_ZN2al22getSystemMessageStringEPKNS_17IUseMessageSystemEPKcS4_">();
+    // isExistLabelInStageMessageHook.installAtSym<"_ZN2al26isExistLabelInStageMessageEPKNS_17IUseMessageSystemEPKcS4_">();
+    // getStageMessageStringHook.installAtSym<"_ZN2al21getStageMessageStringEPKNS_17IUseMessageSystemEPKcS4_">();
 
-    // rs:: function-pointer wiring. tryPumpCappyMessage's dispatch path
-    // skips when either pointer is null, so a lookup failure here leaves
-    // the queue accumulating but never firing — visible as enqueueCappyMessage
-    // logs without corresponding bubble dispatches.
-    {
-        const ptr tryShow = hk::ro::lookupSymbol("_ZN2rs28tryShowCapMessagePriorityLowEPKN2al18IUseSceneObjHolderEPKcii");
-        const ptr isActive = hk::ro::lookupSymbol("_ZN2rs18isActiveCapMessageEPKN2al18IUseSceneObjHolderE");
-        if (tryShow == 0 || isActive == 0) {
-            Logger::log("[cappy] lookupSymbol failed tryShow=0x%lx isActive=0x%lx — pump disabled\n", static_cast<unsigned long>(tryShow),
-                        static_cast<unsigned long>(isActive));
-        } else {
-            Logger::log("[cappy] tryShow @ 0x%lx isActive @ 0x%lx\n", static_cast<unsigned long>(tryShow), static_cast<unsigned long>(isActive));
-            // setCappyRsCalls is static — safe to call at install time
-            // before any ArchipelagoMode instance is created. The function
-            // pointers live in class-static storage and are read by
-            // tryPumpCappyMessage on every frame.
-            ArchipelagoMode::setCappyRsCalls(reinterpret_cast<ArchipelagoMode::TryShowCapMessagePriorityLowFn>(tryShow),
-                                             reinterpret_cast<ArchipelagoMode::IsActiveCapMessageFn>(isActive));
-        }
-    }
+    // // rs:: function-pointer wiring. tryPumpCappyMessage's dispatch path
+    // // skips when either pointer is null, so a lookup failure here leaves
+    // // the queue accumulating but never firing — visible as enqueueCappyMessage
+    // // logs without corresponding bubble dispatches.
+    // {
+    //     const ptr tryShow = hk::ro::lookupSymbol("_ZN2rs28tryShowCapMessagePriorityLowEPKN2al18IUseSceneObjHolderEPKcii");
+    //     const ptr isActive = hk::ro::lookupSymbol("_ZN2rs18isActiveCapMessageEPKN2al18IUseSceneObjHolderE");
+    //     if (tryShow == 0 || isActive == 0) {
+    //         Logger::log("[cappy] lookupSymbol failed tryShow=0x%lx isActive=0x%lx — pump disabled\n", static_cast<unsigned long>(tryShow),
+    //                     static_cast<unsigned long>(isActive));
+    //     } else {
+    //         Logger::log("[cappy] tryShow @ 0x%lx isActive @ 0x%lx\n", static_cast<unsigned long>(tryShow), static_cast<unsigned long>(isActive));
+    //         // setCappyRsCalls is static — safe to call at install time
+    //         // before any ArchipelagoMode instance is created. The function
+    //         // pointers live in class-static storage and are read by
+    //         // tryPumpCappyMessage on every frame.
+    //         ArchipelagoMode::setCappyRsCalls(reinterpret_cast<ArchipelagoMode::TryShowCapMessagePriorityLowFn>(tryShow),
+    //                                          reinterpret_cast<ArchipelagoMode::IsActiveCapMessageFn>(isActive));
+    //     }
+    // }
 }

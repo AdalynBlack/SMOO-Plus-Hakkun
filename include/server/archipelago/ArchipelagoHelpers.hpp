@@ -1351,6 +1351,16 @@ struct shopReplaceText {
     u8 itemClassification;
 };
 
+struct scenarioShine {
+    u8 worldId;
+    short shineUid;
+    u8 scenario;
+};
+
+__attribute__((used)) static const scenarioShine shineScenarios[] = {{1, 218, 2},  {2, 495, 2},  {2, 560, 3},  {3, 130, 2}, {3, 181, 3},
+                                                                     {4, 424, 2},  {7, 130, 2},  {7, 181, 3},  {8, 437, 2}, {9, 1020, 2},
+                                                                     {10, 292, 2}, {10, 290, 3}, {11, 795, 2}, {12, 332, 2}};
+
 bool isInApCostumeList(const char* costumeName);
 int getIndexApCostumeList(const char* costumeName);
 
