@@ -517,8 +517,11 @@ static void onCreditsStart(al::Scene* thisPtr, const al::SceneInitInfo info) {
 }
 
 //
-bool skipHackCutscene(DemoStateHackFirst* thisPtr, IUsePlayerHack** param_1, al::SensorMsg* param_2, al::HitSensor* param_3, al::HitSensor* param_4) {
-    return GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO);
+bool skipHackCutscene(DemoStateHackFirst* thisPtr, IUsePlayerHack** param_1, const al::SensorMsg* param_2, al::HitSensor* param_3, al::HitSensor* param_4) {
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO))
+        return false;
+
+    return thisPtr->tryHackFirst(param_1, param_2, param_3, param_4);
 }
 
 int calcWorldNumForShineListHook(GameProgressData* gpd) {

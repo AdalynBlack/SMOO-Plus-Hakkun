@@ -942,3 +942,6 @@ _ZN2al21getStageMessageStringEPKNS_17IUseMessageSystemEPKcS4_
 // caller, not the callee).
 _ZN2rs28tryShowCapMessagePriorityLowEPKN2al18IUseSceneObjHolderEPKcii
 _ZN2rs18isActiveCapMessageEPKN2al18IUseSceneObjHolderE
+
+
+_ZN18DemoStateHackFirst12tryHackFirstEPP14IUsePlayerHackPKN2al9SensorMsgEPNS3_9HitSensorES8_
