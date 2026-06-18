@@ -488,7 +488,8 @@ bool growOnPlant(GrowFlowerPot* thisPtr) {
 // ===== Demo Hooks =====
 // _ZN16HakoniwaSequence15exeBootLoadDataEv = 0x50F29C - 0x50F304
 void onNewGameDemoStart(char* name, bool unkBool) {
-    GameModeManager::instance()->getMode<ArchipelagoMode>()->setConnectInitFlag(true);
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO))
+        GameModeManager::instance()->getMode<ArchipelagoMode>()->setConnectInitFlag(true);
     al::createSceneHeap(name, unkBool);
     return;
 }
