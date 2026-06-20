@@ -485,11 +485,14 @@ bool growOnPlant(GrowFlowerPot* thisPtr) {
 // ===== Demo Hooks =====
 // _ZN16HakoniwaSequence15exeBootLoadDataEv = 0x50F29C - 0x50F304
 void onNewGameDemoStart(char* name, bool unkBool) {
-    ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
-    archipelago->setConnectInitFlag(true);
-    archipelago->setFirstConnectFlag(true);
-    archipelago->clearCollectibles();
-    archipelago->clearScenarios();
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
+        archipelago->setConnectInitFlag(true);
+        archipelago->setFirstConnectFlag(true);
+        archipelago->clearCollectibles();
+        archipelago->clearScenarios();
+    }
+
     al::createSceneHeap(name, unkBool);
     return;
 }
@@ -517,8 +520,11 @@ static void onCreditsStart(al::Scene* thisPtr, const al::SceneInitInfo info) {
 }
 
 //
-bool skipHackCutscene(DemoStateHackFirst* thisPtr, IUsePlayerHack** param_1, al::SensorMsg* param_2, al::HitSensor* param_3, al::HitSensor* param_4) {
-    return GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO);
+bool skipHackCutscene(DemoStateHackFirst* thisPtr, IUsePlayerHack** param_1, const al::SensorMsg* param_2, al::HitSensor* param_3, al::HitSensor* param_4) {
+    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO))
+        return false;
+
+    return thisPtr->tryHackFirst(param_1, param_2, param_3, param_4);
 }
 
 int calcWorldNumForShineListHook(GameProgressData* gpd) {
