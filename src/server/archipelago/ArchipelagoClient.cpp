@@ -405,6 +405,7 @@ void Client::updateSlotData(SlotData* packet) {
     archipelago->setWorldUnlockCount(12, packet->bowser);
     archipelago->setWorldUnlockCount(15, packet->dark);
     archipelago->setWorldUnlockCount(16, packet->darker);
+    archipelago->setGoal(packet->goal);
     archipelago->setDeathLinkFlag(packet->deathLink);
     archipelago->setCapturesFlag(packet->captures);
     archipelago->setERFlag(packet->entranceRandomizer);
@@ -627,35 +628,12 @@ void Client::addApInfo(ApInfo* packet) {
         int type = static_cast<int>(packet->infoType);
 
         if (type < 3) {
-            sead::WFixedSafeString<40> info1;
-            sead::WFixedSafeString<40> info2;
-            sead::WFixedSafeString<40> info3;
-            info1 = u"";
-            info2 = u"";
-            info3 = u"";
-
-            for (int i = 0; i < 40; i++) {
-                if (packet->info1[i] == '\0') {
-                    break;
-                }
-                info1.append(static_cast<char16>(packet->info1[i]));
-            }
-
-            for (int i = 0; i < 40; i++) {
-                if (packet->info2[i] == '\0') {
-                    break;
-                }
-                info2.append(static_cast<char16>(packet->info2[i]));
-            }
-
-            for (int i = 0; i < 40; i++) {
-                if (packet->info3[i] == '\0') {
-                    break;
-                }
-                info3.append(static_cast<char16>(packet->info3[i]));
-            }
-
-            // setMessage(2, "AP Info Entered");
+            sead::FixedSafeString<APNAMESIZE> info1;
+            sead::FixedSafeString<APNAMESIZE> info2;
+            sead::FixedSafeString<APNAMESIZE> info3;
+            info1 = packet->info1;
+            info2 = packet->info2;
+            info3 = packet->info3;
 
             if (type == 0) {
                 archipelago->setGameName(packet->index1, info1.cstr());
@@ -674,16 +652,17 @@ void Client::addApInfo(ApInfo* packet) {
                 archipelago->setItemName(packet->index2, info2.cstr());
                 archipelago->setItemName(packet->index3, info3.cstr());
             }
-        } else {
-            if (type == 3) {
-                archipelago->setShineItemName(packet->index1, packet->info1);
-
-                if (packet->index1 < 99) {
-                    archipelago->setShineItemName(packet->index2, packet->info2);
-                    archipelago->setShineItemName(packet->index3, packet->info3);
-                }
-            }
         }
+        // } else {
+        //     if (type == 3) {
+        //         archipelago->setShineItemName(packet->index1, packet->info1);
+
+        //         if (packet->index1 < 99) {
+        //             archipelago->setShineItemName(packet->index2, packet->info2);
+        //             archipelago->setShineItemName(packet->index3, packet->info3);
+        //         }
+        //     }
+        // }
     }
 }
 
@@ -848,39 +827,6 @@ void Client::updateShineColor(ShineColor* packet) {
         archipelago->setShineColors(static_cast<int>(packet->shineUid48), packet->color48);
         archipelago->setShineColors(static_cast<int>(packet->shineUid49), packet->color49);
         archipelago->setShineColors(static_cast<int>(packet->shineUid50), packet->color50);
-        // shineColors[static_cast<int>(packet->shineUid51)] = packet->color51;
-        // shineColors[static_cast<int>(packet->shineUid52)] = packet->color52;
-        // shineColors[static_cast<int>(packet->shineUid53)] = packet->color53;
-        // shineColors[static_cast<int>(packet->shineUid54)] = packet->color54;
-        // shineColors[static_cast<int>(packet->shineUid55)] = packet->color55;
-        // shineColors[static_cast<int>(packet->shineUid56)] = packet->color56;
-        // shineColors[static_cast<int>(packet->shineUid57)] = packet->color57;
-        // shineColors[static_cast<int>(packet->shineUid58)] = packet->color58;
-        // shineColors[static_cast<int>(packet->shineUid59)] = packet->color59;
-        // shineColors[static_cast<int>(packet->shineUid60)] = packet->color60;
-        // shineColors[static_cast<int>(packet->shineUid61)] = packet->color61;
-        // shineColors[static_cast<int>(packet->shineUid62)] = packet->color62;
-        // shineColors[static_cast<int>(packet->shineUid63)] = packet->color63;
-        // shineColors[static_cast<int>(packet->shineUid64)] = packet->color64;
-        // shineColors[static_cast<int>(packet->shineUid65)] = packet->color65;
-        // shineColors[static_cast<int>(packet->shineUid66)] = packet->color66;
-        // shineColors[static_cast<int>(packet->shineUid67)] = packet->color67;
-        // shineColors[static_cast<int>(packet->shineUid68)] = packet->color68;
-        // shineColors[static_cast<int>(packet->shineUid69)] = packet->color69;
-        // shineColors[static_cast<int>(packet->shineUid70)] = packet->color70;
-        // shineColors[static_cast<int>(packet->shineUid71)] = packet->color71;
-        // shineColors[static_cast<int>(packet->shineUid72)] = packet->color72;
-        // shineColors[static_cast<int>(packet->shineUid73)] = packet->color73;
-        // shineColors[static_cast<int>(packet->shineUid74)] = packet->color74;
-        // shineColors[static_cast<int>(packet->shineUid75)] = packet->color75;
-        // shineColors[static_cast<int>(packet->shineUid76)] = packet->color76;
-        // shineColors[static_cast<int>(packet->shineUid77)] = packet->color77;
-        // shineColors[static_cast<int>(packet->shineUid78)] = packet->color78;
-        // shineColors[static_cast<int>(packet->shineUid79)] = packet->color79;
-        // shineColors[static_cast<int>(packet->shineUid80)] = packet->color80;
-        // shineColors[static_cast<int>(packet->shineUid81)] = packet->color81;
-        // shineColors[static_cast<int>(packet->shineUid82)] = packet->color82;
-        // shineColors[static_cast<int>(packet->shineUid83)] = packet->color83;
     }
 }
 
@@ -907,33 +853,6 @@ void Client::updateShopReplace(ShopReplacePacket* packet) {
             archipelago->setCapTextReplacement(14, {packet->gameIndex14, packet->playerIndex14, packet->itemIndex14, packet->itemClassification14});
             archipelago->setCapTextReplacement(15, {packet->gameIndex15, packet->playerIndex15, packet->itemIndex15, packet->itemClassification15});
             archipelago->setCapTextReplacement(16, {packet->gameIndex16, packet->playerIndex16, packet->itemIndex16, packet->itemClassification16});
-            archipelago->setCapTextReplacement(17, {packet->gameIndex17, packet->playerIndex17, packet->itemIndex17, packet->itemClassification17});
-            archipelago->setCapTextReplacement(18, {packet->gameIndex18, packet->playerIndex18, packet->itemIndex18, packet->itemClassification18});
-            archipelago->setCapTextReplacement(19, {packet->gameIndex19, packet->playerIndex19, packet->itemIndex19, packet->itemClassification19});
-            archipelago->setCapTextReplacement(20, {packet->gameIndex20, packet->playerIndex20, packet->itemIndex20, packet->itemClassification20});
-            archipelago->setCapTextReplacement(21, {packet->gameIndex21, packet->playerIndex21, packet->itemIndex21, packet->itemClassification21});
-            archipelago->setCapTextReplacement(22, {packet->gameIndex22, packet->playerIndex22, packet->itemIndex22, packet->itemClassification22});
-            archipelago->setCapTextReplacement(23, {packet->gameIndex23, packet->playerIndex23, packet->itemIndex23, packet->itemClassification23});
-            archipelago->setCapTextReplacement(24, {packet->gameIndex24, packet->playerIndex24, packet->itemIndex24, packet->itemClassification24});
-            archipelago->setCapTextReplacement(25, {packet->gameIndex25, packet->playerIndex25, packet->itemIndex25, packet->itemClassification25});
-            archipelago->setCapTextReplacement(26, {packet->gameIndex26, packet->playerIndex26, packet->itemIndex26, packet->itemClassification26});
-            archipelago->setCapTextReplacement(27, {packet->gameIndex27, packet->playerIndex27, packet->itemIndex27, packet->itemClassification27});
-            archipelago->setCapTextReplacement(28, {packet->gameIndex28, packet->playerIndex28, packet->itemIndex28, packet->itemClassification28});
-            archipelago->setCapTextReplacement(29, {packet->gameIndex29, packet->playerIndex29, packet->itemIndex29, packet->itemClassification29});
-            archipelago->setCapTextReplacement(30, {packet->gameIndex30, packet->playerIndex30, packet->itemIndex30, packet->itemClassification30});
-            archipelago->setCapTextReplacement(31, {packet->gameIndex31, packet->playerIndex31, packet->itemIndex31, packet->itemClassification31});
-            archipelago->setCapTextReplacement(32, {packet->gameIndex32, packet->playerIndex32, packet->itemIndex32, packet->itemClassification32});
-            archipelago->setCapTextReplacement(33, {packet->gameIndex33, packet->playerIndex33, packet->itemIndex33, packet->itemClassification33});
-            archipelago->setCapTextReplacement(34, {packet->gameIndex34, packet->playerIndex34, packet->itemIndex34, packet->itemClassification34});
-            archipelago->setCapTextReplacement(35, {packet->gameIndex35, packet->playerIndex35, packet->itemIndex35, packet->itemClassification35});
-            archipelago->setCapTextReplacement(36, {packet->gameIndex36, packet->playerIndex36, packet->itemIndex36, packet->itemClassification36});
-            archipelago->setCapTextReplacement(37, {packet->gameIndex37, packet->playerIndex37, packet->itemIndex37, packet->itemClassification37});
-            archipelago->setCapTextReplacement(38, {packet->gameIndex38, packet->playerIndex38, packet->itemIndex38, packet->itemClassification38});
-            archipelago->setCapTextReplacement(39, {packet->gameIndex39, packet->playerIndex39, packet->itemIndex39, packet->itemClassification39});
-            archipelago->setCapTextReplacement(40, {packet->gameIndex40, packet->playerIndex40, packet->itemIndex40, packet->itemClassification40});
-            archipelago->setCapTextReplacement(41, {packet->gameIndex41, packet->playerIndex41, packet->itemIndex41, packet->itemClassification41});
-            archipelago->setCapTextReplacement(42, {packet->gameIndex42, packet->playerIndex42, packet->itemIndex42, packet->itemClassification42});
-            archipelago->setCapTextReplacement(43, {packet->gameIndex43, packet->playerIndex43, packet->itemIndex43, packet->itemClassification43});
         }
         // Cloth
         if (type == 1) {
@@ -957,95 +876,22 @@ void Client::updateShopReplace(ShopReplacePacket* packet) {
             archipelago->setClothesTextReplacement(17, {packet->gameIndex17, packet->playerIndex17, packet->itemIndex17, packet->itemClassification17});
             archipelago->setClothesTextReplacement(18, {packet->gameIndex18, packet->playerIndex18, packet->itemIndex18, packet->itemClassification18});
             archipelago->setClothesTextReplacement(19, {packet->gameIndex19, packet->playerIndex19, packet->itemIndex19, packet->itemClassification19});
-            archipelago->setClothesTextReplacement(20, {packet->gameIndex20, packet->playerIndex20, packet->itemIndex20, packet->itemClassification20});
-            archipelago->setClothesTextReplacement(21, {packet->gameIndex21, packet->playerIndex21, packet->itemIndex21, packet->itemClassification21});
-            archipelago->setClothesTextReplacement(22, {packet->gameIndex22, packet->playerIndex22, packet->itemIndex22, packet->itemClassification22});
-            archipelago->setClothesTextReplacement(23, {packet->gameIndex23, packet->playerIndex23, packet->itemIndex23, packet->itemClassification23});
-            archipelago->setClothesTextReplacement(24, {packet->gameIndex24, packet->playerIndex24, packet->itemIndex24, packet->itemClassification24});
-            archipelago->setClothesTextReplacement(25, {packet->gameIndex25, packet->playerIndex25, packet->itemIndex25, packet->itemClassification25});
-            archipelago->setClothesTextReplacement(26, {packet->gameIndex26, packet->playerIndex26, packet->itemIndex26, packet->itemClassification26});
-            archipelago->setClothesTextReplacement(27, {packet->gameIndex27, packet->playerIndex27, packet->itemIndex27, packet->itemClassification27});
-            archipelago->setClothesTextReplacement(28, {packet->gameIndex28, packet->playerIndex28, packet->itemIndex28, packet->itemClassification28});
-            archipelago->setClothesTextReplacement(29, {packet->gameIndex29, packet->playerIndex29, packet->itemIndex29, packet->itemClassification29});
-            archipelago->setClothesTextReplacement(30, {packet->gameIndex30, packet->playerIndex30, packet->itemIndex30, packet->itemClassification30});
-            archipelago->setClothesTextReplacement(31, {packet->gameIndex31, packet->playerIndex31, packet->itemIndex31, packet->itemClassification31});
-            archipelago->setClothesTextReplacement(32, {packet->gameIndex32, packet->playerIndex32, packet->itemIndex32, packet->itemClassification32});
-            archipelago->setClothesTextReplacement(33, {packet->gameIndex33, packet->playerIndex33, packet->itemIndex33, packet->itemClassification33});
-            archipelago->setClothesTextReplacement(34, {packet->gameIndex34, packet->playerIndex34, packet->itemIndex34, packet->itemClassification34});
-            archipelago->setClothesTextReplacement(35, {packet->gameIndex35, packet->playerIndex35, packet->itemIndex35, packet->itemClassification35});
-            archipelago->setClothesTextReplacement(36, {packet->gameIndex36, packet->playerIndex36, packet->itemIndex36, packet->itemClassification36});
-            archipelago->setClothesTextReplacement(37, {packet->gameIndex37, packet->playerIndex37, packet->itemIndex37, packet->itemClassification37});
-            archipelago->setClothesTextReplacement(38, {packet->gameIndex38, packet->playerIndex38, packet->itemIndex38, packet->itemClassification38});
-            archipelago->setClothesTextReplacement(39, {packet->gameIndex39, packet->playerIndex39, packet->itemIndex39, packet->itemClassification39});
-            archipelago->setClothesTextReplacement(40, {packet->gameIndex40, packet->playerIndex40, packet->itemIndex40, packet->itemClassification40});
-            archipelago->setClothesTextReplacement(41, {packet->gameIndex41, packet->playerIndex41, packet->itemIndex41, packet->itemClassification41});
-            archipelago->setClothesTextReplacement(42, {packet->gameIndex42, packet->playerIndex42, packet->itemIndex42, packet->itemClassification42});
-            archipelago->setClothesTextReplacement(43, {packet->gameIndex43, packet->playerIndex43, packet->itemIndex43, packet->itemClassification43});
         }
         // Sticker
         if (type == 2) {
-            archipelago->setStickerTextReplacement(0, {packet->gameIndex0, packet->playerIndex0, packet->itemIndex0, packet->itemClassification0});
-            archipelago->setStickerTextReplacement(1, {packet->gameIndex1, packet->playerIndex1, packet->itemIndex1, packet->itemClassification1});
-            archipelago->setStickerTextReplacement(2, {packet->gameIndex2, packet->playerIndex2, packet->itemIndex2, packet->itemClassification2});
-            archipelago->setStickerTextReplacement(3, {packet->gameIndex3, packet->playerIndex3, packet->itemIndex3, packet->itemClassification3});
-            archipelago->setStickerTextReplacement(4, {packet->gameIndex4, packet->playerIndex4, packet->itemIndex4, packet->itemClassification4});
-            archipelago->setStickerTextReplacement(5, {packet->gameIndex5, packet->playerIndex5, packet->itemIndex5, packet->itemClassification5});
-            archipelago->setStickerTextReplacement(6, {packet->gameIndex6, packet->playerIndex6, packet->itemIndex6, packet->itemClassification6});
-            archipelago->setStickerTextReplacement(7, {packet->gameIndex7, packet->playerIndex7, packet->itemIndex7, packet->itemClassification7});
-            archipelago->setStickerTextReplacement(8, {packet->gameIndex8, packet->playerIndex8, packet->itemIndex8, packet->itemClassification8});
-            archipelago->setStickerTextReplacement(9, {packet->gameIndex9, packet->playerIndex9, packet->itemIndex9, packet->itemClassification9});
-            archipelago->setStickerTextReplacement(10, {packet->gameIndex10, packet->playerIndex10, packet->itemIndex10, packet->itemClassification10});
-            archipelago->setStickerTextReplacement(11, {packet->gameIndex11, packet->playerIndex11, packet->itemIndex11, packet->itemClassification11});
-            archipelago->setStickerTextReplacement(12, {packet->gameIndex12, packet->playerIndex12, packet->itemIndex12, packet->itemClassification12});
-            archipelago->setStickerTextReplacement(13, {packet->gameIndex13, packet->playerIndex13, packet->itemIndex13, packet->itemClassification13});
-            archipelago->setStickerTextReplacement(14, {packet->gameIndex14, packet->playerIndex14, packet->itemIndex14, packet->itemClassification14});
-            archipelago->setStickerTextReplacement(15, {packet->gameIndex15, packet->playerIndex15, packet->itemIndex15, packet->itemClassification15});
-            archipelago->setStickerTextReplacement(16, {packet->gameIndex16, packet->playerIndex16, packet->itemIndex16, packet->itemClassification16});
+            archipelago->setRegionalTextReplacement(0, {packet->gameIndex0, packet->playerIndex0, packet->itemIndex0, packet->itemClassification0});
+            archipelago->setRegionalTextReplacement(1, {packet->gameIndex1, packet->playerIndex1, packet->itemIndex1, packet->itemClassification1});
+            archipelago->setRegionalTextReplacement(2, {packet->gameIndex2, packet->playerIndex2, packet->itemIndex2, packet->itemClassification2});
+            archipelago->setRegionalTextReplacement(3, {packet->gameIndex3, packet->playerIndex3, packet->itemIndex3, packet->itemClassification3});
+            archipelago->setRegionalTextReplacement(4, {packet->gameIndex4, packet->playerIndex4, packet->itemIndex4, packet->itemClassification4});
+            archipelago->setRegionalTextReplacement(5, {packet->gameIndex5, packet->playerIndex5, packet->itemIndex5, packet->itemClassification5});
+            archipelago->setRegionalTextReplacement(6, {packet->gameIndex6, packet->playerIndex6, packet->itemIndex6, packet->itemClassification6});
+            archipelago->setRegionalTextReplacement(7, {packet->gameIndex7, packet->playerIndex7, packet->itemIndex7, packet->itemClassification7});
+            archipelago->setRegionalTextReplacement(8, {packet->gameIndex8, packet->playerIndex8, packet->itemIndex8, packet->itemClassification8});
         }
-        // Gift
+        // Shop Moon
         if (type == 3) {
-            archipelago->setSouvenirTextReplacement(0, {packet->gameIndex0, packet->playerIndex0, packet->itemIndex0, packet->itemClassification0});
-            archipelago->setSouvenirTextReplacement(1, {packet->gameIndex1, packet->playerIndex1, packet->itemIndex1, packet->itemClassification1});
-            archipelago->setSouvenirTextReplacement(2, {packet->gameIndex2, packet->playerIndex2, packet->itemIndex2, packet->itemClassification2});
-            archipelago->setSouvenirTextReplacement(3, {packet->gameIndex3, packet->playerIndex3, packet->itemIndex3, packet->itemClassification3});
-            archipelago->setSouvenirTextReplacement(4, {packet->gameIndex4, packet->playerIndex4, packet->itemIndex4, packet->itemClassification4});
-            archipelago->setSouvenirTextReplacement(5, {packet->gameIndex5, packet->playerIndex5, packet->itemIndex5, packet->itemClassification5});
-            archipelago->setSouvenirTextReplacement(6, {packet->gameIndex6, packet->playerIndex6, packet->itemIndex6, packet->itemClassification6});
-            archipelago->setSouvenirTextReplacement(7, {packet->gameIndex7, packet->playerIndex7, packet->itemIndex7, packet->itemClassification7});
-            archipelago->setSouvenirTextReplacement(8, {packet->gameIndex8, packet->playerIndex8, packet->itemIndex8, packet->itemClassification8});
-            archipelago->setSouvenirTextReplacement(9, {packet->gameIndex9, packet->playerIndex9, packet->itemIndex9, packet->itemClassification9});
-            archipelago->setSouvenirTextReplacement(10, {packet->gameIndex10, packet->playerIndex10, packet->itemIndex10, packet->itemClassification10});
-            archipelago->setSouvenirTextReplacement(11, {packet->gameIndex11, packet->playerIndex11, packet->itemIndex11, packet->itemClassification11});
-            archipelago->setSouvenirTextReplacement(12, {packet->gameIndex12, packet->playerIndex12, packet->itemIndex12, packet->itemClassification12});
-            archipelago->setSouvenirTextReplacement(13, {packet->gameIndex13, packet->playerIndex13, packet->itemIndex13, packet->itemClassification13});
-            archipelago->setSouvenirTextReplacement(14, {packet->gameIndex14, packet->playerIndex14, packet->itemIndex14, packet->itemClassification14});
-            archipelago->setSouvenirTextReplacement(15, {packet->gameIndex15, packet->playerIndex15, packet->itemIndex15, packet->itemClassification15});
-            archipelago->setSouvenirTextReplacement(16, {packet->gameIndex16, packet->playerIndex16, packet->itemIndex16, packet->itemClassification16});
-            archipelago->setSouvenirTextReplacement(17, {packet->gameIndex17, packet->playerIndex17, packet->itemIndex17, packet->itemClassification17});
-            archipelago->setSouvenirTextReplacement(18, {packet->gameIndex18, packet->playerIndex18, packet->itemIndex18, packet->itemClassification18});
-            archipelago->setSouvenirTextReplacement(19, {packet->gameIndex19, packet->playerIndex19, packet->itemIndex19, packet->itemClassification19});
-            archipelago->setSouvenirTextReplacement(20, {packet->gameIndex20, packet->playerIndex20, packet->itemIndex20, packet->itemClassification20});
-            archipelago->setSouvenirTextReplacement(21, {packet->gameIndex21, packet->playerIndex21, packet->itemIndex21, packet->itemClassification21});
-            archipelago->setSouvenirTextReplacement(22, {packet->gameIndex22, packet->playerIndex22, packet->itemIndex22, packet->itemClassification22});
-            archipelago->setSouvenirTextReplacement(23, {packet->gameIndex23, packet->playerIndex23, packet->itemIndex23, packet->itemClassification23});
-            archipelago->setSouvenirTextReplacement(24, {packet->gameIndex24, packet->playerIndex24, packet->itemIndex24, packet->itemClassification24});
-            archipelago->setSouvenirTextReplacement(25, {packet->gameIndex25, packet->playerIndex25, packet->itemIndex25, packet->itemClassification25});
-        }
-        // Moon
-        if (type == 4) {
-            archipelago->setShopMoonTextReplacement(0, {packet->gameIndex0, packet->playerIndex0, packet->itemIndex0, packet->itemClassification0});
-            archipelago->setShopMoonTextReplacement(1, {packet->gameIndex1, packet->playerIndex1, packet->itemIndex1, packet->itemClassification1});
-            archipelago->setShopMoonTextReplacement(2, {packet->gameIndex2, packet->playerIndex2, packet->itemIndex2, packet->itemClassification2});
-            archipelago->setShopMoonTextReplacement(3, {packet->gameIndex3, packet->playerIndex3, packet->itemIndex3, packet->itemClassification3});
-            archipelago->setShopMoonTextReplacement(4, {packet->gameIndex4, packet->playerIndex4, packet->itemIndex4, packet->itemClassification4});
-            archipelago->setShopMoonTextReplacement(5, {packet->gameIndex5, packet->playerIndex5, packet->itemIndex5, packet->itemClassification5});
-            archipelago->setShopMoonTextReplacement(6, {packet->gameIndex6, packet->playerIndex6, packet->itemIndex6, packet->itemClassification6});
-            archipelago->setShopMoonTextReplacement(7, {packet->gameIndex7, packet->playerIndex7, packet->itemIndex7, packet->itemClassification7});
-            archipelago->setShopMoonTextReplacement(8, {packet->gameIndex8, packet->playerIndex8, packet->itemIndex8, packet->itemClassification8});
-            archipelago->setShopMoonTextReplacement(9, {packet->gameIndex9, packet->playerIndex9, packet->itemIndex9, packet->itemClassification9});
-            archipelago->setShopMoonTextReplacement(10, {packet->gameIndex10, packet->playerIndex10, packet->itemIndex10, packet->itemClassification10});
-            archipelago->setShopMoonTextReplacement(11, {packet->gameIndex11, packet->playerIndex11, packet->itemIndex11, packet->itemClassification11});
-            archipelago->setShopMoonTextReplacement(12, {packet->gameIndex12, packet->playerIndex12, packet->itemIndex12, packet->itemClassification12});
+            archipelago->setShopMoonTextReplacement({packet->gameIndex0, packet->playerIndex0, packet->itemIndex0, packet->itemClassification0});
         }
 
         // Over world

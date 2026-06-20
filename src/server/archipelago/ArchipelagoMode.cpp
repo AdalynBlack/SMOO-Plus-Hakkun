@@ -83,18 +83,18 @@ void ArchipelagoMode::init(const GameModeInitInfo& info) {
         clearCollectibles();
 
         shineTextReplacements.fill({0, 0});
-        mShineItemNames.fill(sead::FixedSafeString<40>());
+        // mShineItemNames.fill(sead::FixedSafeString<40>());
         shineColors.fill(0);
 
-        shopCapTextReplacements.fill({254, 255, 255, 255});
-        shopClothTextReplacements.fill({254, 255, 255, 255});
-        shopStickerTextReplacements.fill({254, 255, 255, 255});
-        shopGiftTextReplacements.fill({254, 255, 255, 255});
-        shopMoonTextReplacements.fill({254, 255, 255, 255});
+        mShopCapTextReplacements.fill({254, 255, 255, 255});
+        mShopClothTextReplacements.fill({254, 255, 255, 255});
+        mShopRegionalTextReplacements.fill({254, 255, 255, 255});
+        // shopGiftTextReplacements.fill({254, 255, 255, 255});
+        mShopMoonTextReplacements = {254, 255, 255, 255};
 
-        mGameNames.fill(sead::WFixedSafeString<40>());
-        mSlotNames.fill(sead::WFixedSafeString<40>());
-        mItemNames.fill(sead::WFixedSafeString<40>());
+        mGameNames.fill(sead::FixedSafeString<APNAMESIZE>());
+        mSlotNames.fill(sead::FixedSafeString<APNAMESIZE>());
+        mItemNames.fill(sead::FixedSafeString<APNAMESIZE>());
 
         mOverworldStageConnections.fill({255, 255});
         mSubAreaStageConnections.fill({255, 255});
@@ -127,42 +127,6 @@ void ArchipelagoMode::init(const GameModeInitInfo& info) {
     int worldId = GameDataFunction::getCurrentWorldId(info.mSceneObjHolder);
     int worldScenario = GameDataFunction::getWorldScenarioNo(info.mSceneObjHolder, worldId);
 
-    // Guarantee Lake and Snow selection
-    // if (accessor.mData->mGameDataFile->mGameProgressData->mUnlockWorldStatusFirstBranch != GameProgressData::FirstBranch::None)
-    //{
-    //    if (accessor.mData->mGameDataFile->mGameProgressData->mUnlockWorldStatusFirstBranch !=
-    //        GameProgressData::FirstBranch::Lake)
-    //    {
-    //        accessor.mData->mGameDataFile->mGameProgressData->mUnlockWorldStatusFirstBranch =
-    //            GameProgressData::FirstBranch::Lake;
-    //    }
-    //}
-
-    // if (accessor.mData->mGameDataFile->mGameProgressData->mUnlockWorldStatusSecondBranch != GameProgressData::SecondBranch::None)
-    //{
-    //     if (accessor.mData->mGameDataFile->mGameProgressData->mUnlockWorldStatusSecondBranch !=
-    //         GameProgressData::SecondBranch::Snow)
-    //     {
-    //         accessor.mData->mGameDataFile->mGameProgressData->mUnlockWorldStatusSecondBranch =
-    //             GameProgressData::SecondBranch::Snow;
-    //     }
-    // }
-
-    // Fix possible wooded softlock not sure if needed
-    // if (worldId == 3 && worldScenario == 2 && Client::hasCapture("Senobi") &&
-    //    Client::hasShine(159)) {
-    //    ChangeStageInfo info = ChangeStageInfo(accessor.mData, "", "ForestWorldBossStage", false, 2,
-    //                                           static_cast<ChangeStageInfo::SubScenarioType>(0));
-    //    GameDataFunction::tryChangeNextStage(accessor, &info);
-    //}
-
-    // Enable Cappy on load into Cap Intro (Soft Locks)
-    /*if (worldId == 0 && worldScenario < 2 && !GameDataFunction::isEnableCap(accessor))
-    {
-        GameDataFunction::enableCap(accessor);
-        GameDataFunction::restartStage(accessor);
-    }*/
-
     if (worldScenario > getScenario(worldId)) {
         setScenario(worldId, worldScenario);
     }
@@ -180,27 +144,6 @@ void ArchipelagoMode::begin() {
 
     GameDataHolderAccessor accessor(mCurScene);
     GameDataHolderWriter writer(mCurScene);
-
-    // writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexWaterfall()] =
-    //     GameDataFunction::getWorldIndexSky();
-    // writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexSand()] =
-    //     GameDataFunction::getWorldIndexCity();
-    // writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexForest()] =
-    //     GameDataFunction::getWorldIndexLava();
-    // writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexLake()] =
-    //     GameDataFunction::getWorldIndexSand();
-    // writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexCity()] =
-    //     GameDataFunction::getWorldIndexForest();
-    // writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexSea()] =
-    //     GameDataFunction::getWorldIndexLake();
-    // writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexSnow()] =
-    //     GameDataFunction::getWorldIndexWaterfall();
-    // writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexLava()] =
-    //     GameDataFunction::getWorldIndexPeach();
-    // writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexSky()] =
-    //     GameDataFunction::getWorldIndexSea();
-    // writer.mData->getGameDataFile()->getGameProgressData()->mWorldIdForWorldWarpHole[GameDataFunction::getWorldIndexPeach()] =
-    //     GameDataFunction::getWorldIndexSnow();
 
     GameModeBase::begin();
 
@@ -272,6 +215,14 @@ ChangeStageInfo* ArchipelagoMode::handleER(const ChangeStageInfo* info) {
     // Gets custom stageIds added by Archipelago based on kingdom to prevent duplicates
     getCustomStageId(accessor, info, &stageId);
 
+    // if (mGoal == GameDataFunction::getWorldIndexMoon() && al::isEqualString(stageId.cstr(), "aaa") &&
+    //     !accessor.mData->getGameDataFile()->getGameProgressData()->mIsUnlockWorld[GameDataFunction::getWorldIndexMoon()]) {
+    //     Client::addMessage("Unlock Moon Kingdom normally to enter the church.");
+    //     ChangeStageInfo toInfo(accessor.mData, "aaa", "MoonWorldHomeStage", false, -1, static_cast<ChangeStageInfo::SubScenarioType>(0));
+    //     toInfo.mPlacementString = info->getPlacementString();
+    //     return &toInfo;
+    // }
+
     int stageIndex = getIndexStageNameList(info->getStageName());
     int stageIdIndex = getIndexStageIdList(stageId.cstr());
     bool isInSubArea = false;
@@ -302,17 +253,8 @@ ChangeStageInfo* ArchipelagoMode::handleER(const ChangeStageInfo* info) {
     // Might fail on snow sub areas ammend with list of strictly effects maps
     stageConnection currentStageConnection;
     if (isInSubArea) {
-        // if (isPartOf(info->getStageName(), "WorldHomeStage")) {
-        //     // Access Sub Area connections
-        //     toStageId = stageIdList[mSubAreaStageConnections[stageIdIndex].toStageIdIndex];
-        //     toStageName = stageNameList[mSubAreaStageConnections[stageIdIndex].toStageNameIndex];
-
-        // } else {
-        // Make sure this isn't redundant with new sub area over world test
-        // Access Over World conenctions
-
+        // Access Sub World conenctions
         currentStageConnection = mSubAreaStageConnections[stageIdIndex];
-        // }
     } else {
         // Access Over World connections
         currentStageConnection = mOverworldStageConnections[stageIdIndex];
@@ -344,6 +286,7 @@ ChangeStageInfo* ArchipelagoMode::handleER(const ChangeStageInfo* info) {
     mLastERStageName = toInfo.mChangeStageName.cstr();
 
     return &toInfo;
+    // return nullptr
 }
 
 bool ArchipelagoMode::isTargetAlive() {
@@ -434,27 +377,22 @@ int ArchipelagoMode::getWorldUnlockCount(int worldId) {
     return mWorldPayCounts[worldId];
 }
 
-void ArchipelagoMode::setGameName(int index, const char16_t* name) {
+void ArchipelagoMode::setGameName(int index, const char* name) {
     mGameNames[index] = mGameNames[index].cEmptyString;
     mGameNames[index].append(name);
 }
 
-void ArchipelagoMode::setSlotName(int index, const char16_t* name) {
+void ArchipelagoMode::setSlotName(int index, const char* name) {
     mSlotNames[index] = mSlotNames[index].cEmptyString;
     mSlotNames[index].append(name);
 }
 
-void ArchipelagoMode::setItemName(int index, const char16_t* name) {
+void ArchipelagoMode::setItemName(int index, const char* name) {
     mItemNames[index] = mItemNames[index].cEmptyString;
     mItemNames[index].append(name);
 }
 
-void ArchipelagoMode::setShineItemName(int index, const char* name) {
-    mShineItemNames[index] = mShineItemNames[index].cEmptyString;
-    mShineItemNames[index].append(name);
-}
-
-void ArchipelagoMode::setShineTextReplacement(int index, shineReplaceText replace) {
+void ArchipelagoMode::setShineTextReplacement(int index, replaceText replace) {
     shineTextReplacements[index] = replace;
 }
 
@@ -463,28 +401,22 @@ void ArchipelagoMode::setShineColors(int index, u8 replace) {
 }
 
 void ArchipelagoMode::setCapTextReplacement(int index, shopReplaceText replace) {
-    if (index < shopCapTextReplacements.size())
-        shopCapTextReplacements[index] = replace;
+    if (index < mShopCapTextReplacements.size())
+        mShopCapTextReplacements[index] = replace;
 }
 
 void ArchipelagoMode::setClothesTextReplacement(int index, shopReplaceText replace) {
-    if (index < shopClothTextReplacements.size())
-        shopClothTextReplacements[index] = replace;
+    if (index < mShopClothTextReplacements.size())
+        mShopClothTextReplacements[index] = replace;
 }
 
-void ArchipelagoMode::setSouvenirTextReplacement(int index, shopReplaceText replace) {
-    if (index < shopGiftTextReplacements.size())
-        shopGiftTextReplacements[index] = replace;
+void ArchipelagoMode::setRegionalTextReplacement(int index, shopReplaceText replace) {
+    if (index < mShopRegionalTextReplacements.size())
+        mShopRegionalTextReplacements[index] = replace;
 }
 
-void ArchipelagoMode::setStickerTextReplacement(int index, shopReplaceText replace) {
-    if (index < shopStickerTextReplacements.size())
-        shopStickerTextReplacements[index] = replace;
-}
-
-void ArchipelagoMode::setShopMoonTextReplacement(int index, shopReplaceText replace) {
-    if (index < shopMoonTextReplacements.size())
-        shopMoonTextReplacements[index] = replace;
+void ArchipelagoMode::setShopMoonTextReplacement(shopReplaceText replace) {
+    mShopMoonTextReplacements = replace;
 }
 
 void ArchipelagoMode::setOverWorldStageConnection(int index, stageConnection replace) {
@@ -783,6 +715,134 @@ bool ArchipelagoMode::hasItem(const ShopItem::ItemInfo* info) {
     }
 }
 
+void ArchipelagoMode::addScoutedOutfit(int index) {
+    int outfits = mScoutedOutfits[index / 8];
+
+    int curIndex = (index / 8) * 8;
+    int i = 1;
+    while (i < 0x100) {
+        if (curIndex == index) {
+            outfits = outfits | i;
+            break;
+        }
+        i = i << 1;
+        curIndex += 1;
+    }
+
+    mScoutedOutfits[index / 8] = outfits;
+}
+
+bool ArchipelagoMode::hasScoutedOutfit(int index) {
+    u8 outfits = mScoutedOutfits[index / 8];
+
+    int curIndex = (index / 8) * 8;
+    int i = 1;
+    while (i < 0x100) {
+        if (curIndex == index) {
+            outfits = outfits & i;
+            return (outfits == i);
+        }
+        i = i << 1;
+        curIndex += 1;
+    }
+
+    return false;
+}
+
+void ArchipelagoMode::addScoutedSticker(int index) {
+    int stickers = mScoutedStickers[index / 8];
+
+    int curIndex = (index / 8) * 8;
+    int i = 1;
+    while (i < 0x100) {
+        if (curIndex == index) {
+            stickers = stickers | i;
+            break;
+        }
+        i = i << 1;
+        curIndex += 1;
+    }
+
+    mScoutedStickers[index / 8] = stickers;
+}
+
+bool ArchipelagoMode::hasScoutedSticker(int index) {
+    if (index == -1) {
+        // Client::addMessage(info->mName);
+        return false;
+    }
+
+    u8 stickers = mScoutedStickers[index / 8];
+
+    int curIndex = (index / 8) * 8;
+    int i = 1;
+    while (i < 0x100) {
+        if (curIndex == index) {
+            stickers = stickers & i;
+            return (stickers == i);
+        }
+        i = i << 1;
+        curIndex += 1;
+    }
+
+    return false;
+}
+
+void ArchipelagoMode::addScoutedSouvenir(int index) {
+    int souvenirs = mScoutedSouvenirs[index / 8];
+
+    int curIndex = (index / 8) * 8;
+    int i = 1;
+    while (i < 0x100) {
+        if (curIndex == index) {
+            souvenirs = souvenirs | i;
+            break;
+        }
+        i = i << 1;
+        curIndex += 1;
+    }
+
+    mScoutedSouvenirs[index / 8] = souvenirs;
+}
+
+bool ArchipelagoMode::hasScoutedSouvenir(int index) {
+    if (index == -1) {
+        // Client::addMessage(info->mName);
+        return false;
+    }
+
+    u8 souvenirs = mScoutedSouvenirs[index / 8];
+
+    int curIndex = (index / 8) * 8;
+    int i = 1;
+    while (i < 0x100) {
+        if (curIndex == index) {
+            souvenirs = souvenirs & i;
+            return (souvenirs == i);
+        }
+        i = i << 1;
+        curIndex += 1;
+    }
+
+    return false;
+}
+
+bool ArchipelagoMode::hasScoutedItem(int type, int index) {
+    switch (type) {
+    case -6:
+        return hasScoutedOutfit(index + 44);
+    case -5:
+        return hasScoutedOutfit(index);
+    case -7:
+        return hasScoutedSticker(index);
+    case -8:
+        return hasScoutedSouvenir(index);
+    default:
+        // Moon and useitem
+        return true;
+    }
+}
+
 void ArchipelagoMode::addItem(const ShopItem::ItemInfo* info) {
     switch (static_cast<int>(info->type)) {
     case 1:
@@ -800,6 +860,26 @@ void ArchipelagoMode::addItem(const ShopItem::ItemInfo* info) {
     default:
         // Moon and useitem
         break;
+    }
+}
+
+void ArchipelagoMode::addScoutedItem(int type, int index) {
+    switch (type) {
+    case -6:
+        addScoutedOutfit(index + 44);
+        break;
+    case -5:
+        addScoutedOutfit(index);
+        break;
+    case -7:
+        addScoutedSticker(index);
+        break;
+    case -8:
+        addScoutedSouvenir(index);
+        break;
+    default:
+        // Moon and useitem
+        return;
     }
 }
 
@@ -981,6 +1061,11 @@ bool ArchipelagoMode::hasRegionalCoin(int index) {
     }
 
     u8 checkedRegionalsEntry = mCollectedRegionals[index / 8];
+    // if (index == 0) {
+    //     Client::addMessage(intToCstr(int(checkedRegionalsEntry & 0b1)));
+    //     Client::addMessage(intToCstr(int(checkedRegionalsEntry)));
+    //     Client::addMessage(intToCstr(checkedRegionalsEntry));
+    // }
 
     int curIndex = (index / 8) * 8;
     int i = 1;
@@ -1061,21 +1146,17 @@ const char* ArchipelagoMode::getShineReplacementText() {
 
     GameDataHolderAccessor accessor(mCurScene);
 
-    if (isPartOf(GameDataFunction::getCurrentStageName(accessor), "WorldShop")) {
-        sead::WFixedSafeString<128> wideShineName = sead::WFixedSafeString<128>();
-        wideShineName = mSlotNames[shopMoonTextReplacements[lastShopMoonReplaceIndex].slotIndex].cstr();
-        wideShineName.append(u" ");
-        wideShineName.append(mItemNames[shopMoonTextReplacements[lastShopMoonReplaceIndex].apItemNameIndex].cstr());
-        sead::FixedSafeString<128> shineName = sead::FixedSafeString<128>();
+    sead::FixedSafeString<128> shineName = sead::FixedSafeString<128>();
 
-        for (int i = 0; i < wideShineName.calcLength(); i++) {
-            shineName.append(static_cast<char>(wideShineName[i]));
-        }
+    if (isPartOf(GameDataFunction::getCurrentStageName(accessor), "WorldShop")) {
+        shineName = mSlotNames[mShopMoonTextReplacements.slotNameIndex].cstr();
+        shineName.append(" ");
+        shineName.append(mItemNames[mShopMoonTextReplacements.itemNameIndex].cstr());
 
         return shineName.cstr();
     }
 
-    shineReplaceText curReplaceText;
+    replaceText curReplaceText;
 
     if (mRecentShineHintIndex > 99) {
         if (mRecentShineHintIndex == 1091 || (mRecentShineHintIndex > 1122 && mRecentShineHintIndex < 1152)) {
@@ -1091,10 +1172,14 @@ const char* ArchipelagoMode::getShineReplacementText() {
 
     // Client::addMessage(intToCstr(mRecentShineHintIndex));
 
-    if (curReplaceText.shineItemNameIndex == 255) {
+    if (curReplaceText.itemNameIndex == 255) {
         return "Invalid shine item name index";
     } else {
-        return mShineItemNames[curReplaceText.shineItemNameIndex].cstr();
+        shineName = mSlotNames[curReplaceText.slotNameIndex];
+        shineName.append("'s ");
+        shineName.append(mItemNames[curReplaceText.itemNameIndex]);
+
+        return shineName.cstr();
     }
 }
 
@@ -1214,21 +1299,59 @@ const char16_t* ArchipelagoMode::getShopReplacementText(const char* fileName, co
     }
     shopReplaceText curItem = {255, 255, 255, 255};
 
+    CheckType scoutType = CheckType::CapScout;
+    int locationId = -1;
+
     if (strcmp("ItemCap", fileName) == 0) {
-        curItem = shopCapTextReplacements[getIndexApCostumeList(convert.cstr()) - 1];
+        locationId = getIndexApCostumeList(convert.cstr());
+        int itemIndex = locationId - 1;
+        if (itemIndex > 18) {
+            itemIndex -= 19;
+            if (itemIndex > 16)
+                itemIndex -= 3;
+            curItem = mShopCapTextReplacements[itemIndex];
+        } else {
+            int regionalListIndex = getIndexRegionalItemList(mRelativeWorldCoinCollect, convert.cstr());
+            if (regionalListIndex == 0)
+                mRegionalOffset = 0;
+            curItem = mShopRegionalTextReplacements[regionalListIndex + mRegionalOffset];
+            // Client::addMessage(mItemNames[curItem.itemNameIndex].cstr());
+        }
+        mRegionalOffset += 1;
+        scoutType = CheckType::CapScout;
     } else if (strcmp("ItemCloth", fileName) == 0) {
-        curItem = shopClothTextReplacements[getIndexApCostumeList(convert.cstr()) - 1];
+        locationId = getIndexApCostumeList(convert.cstr());
+        int itemIndex = locationId - 1;
+        if (itemIndex > 18) {
+            itemIndex -= 19;
+            if (itemIndex > 16)
+                itemIndex -= 3;
+            curItem = mShopClothTextReplacements[itemIndex];
+        } else {
+            curItem = mShopRegionalTextReplacements[getIndexRegionalItemList(mRelativeWorldCoinCollect, convert.cstr()) + mRegionalOffset];
+        }
+        scoutType = CheckType::ClothesScout;
     } else if (strcmp("ItemSticker", fileName) == 0) {
-        curItem = shopStickerTextReplacements[getIndexStickerList(convert.cstr())];
+        locationId = getIndexStickerList(convert.cstr());
+        curItem = curItem = mShopRegionalTextReplacements[getIndexRegionalItemList(mRelativeWorldCoinCollect, convert.cstr()) + mRegionalOffset];
+        scoutType = CheckType::StickerScout;
     } else if (strcmp("ItemGift", fileName) == 0) {
-        curItem = shopGiftTextReplacements[getIndexSouvenirList(convert.cstr())];
+        locationId = getIndexSouvenirList(convert.cstr());
+        curItem = curItem = mShopRegionalTextReplacements[getIndexRegionalItemList(mRelativeWorldCoinCollect, convert.cstr()) + mRegionalOffset];
+        scoutType = CheckType::SouvenirScout;
     } else if (strcmp("ItemMoon", fileName) == 0) {
         // Find out key for each kingdom as still is unknown
-        lastShopMoonReplaceIndex = getIndexMoonItemList(convert.cstr());
-        curItem = shopMoonTextReplacements[lastShopMoonReplaceIndex];
+        locationId = getIndexMoonItemList(convert.cstr());
+        curItem = mShopMoonTextReplacements;
+        scoutType = CheckType::ShopMoonScout;
     } else {
         // Not included items like Life Up Hearts
         return u"";
+    }
+
+    if (locationId > -1 && !hasScoutedItem(scoutType, locationId)) {
+        addScoutedItem(scoutType, locationId);
+        Client::sendCheckPacket(locationId, scoutType);
     }
 
     if (curItem.gameIndex == 254) {
@@ -1238,14 +1361,14 @@ const char16_t* ArchipelagoMode::getShopReplacementText(const char* fileName, co
     if (isExplain) {
         message.append(u"Comes from the world of ");
         // if (mGameNames[curItem.gameIndex].isEmpty()) {
-        message.append(mGameNames[curItem.gameIndex].cstr());
+        message.append(utf8ToUtf16(mGameNames[curItem.gameIndex].cstr()));
         //} else {
         // message.append(u"Missing Game");
         // }
 
         message.append(u".\nSeems to belong to ");
         // if (mSlotNames[curItem.slotIndex].isEmpty()) {
-        message.append(mSlotNames[curItem.slotIndex].cstr());
+        message.append(utf8ToUtf16(mSlotNames[curItem.slotNameIndex].cstr()));
         //} else {
         // message.append(u"Missing Slot Name");
         //}
@@ -1262,7 +1385,7 @@ const char16_t* ArchipelagoMode::getShopReplacementText(const char* fileName, co
         }
     } else {
         // if (mSlotNames[curItem.slotIndex].isEmpty()) {
-        message.append(mItemNames[curItem.apItemNameIndex].cstr());
+        message.append(utf8ToUtf16(mItemNames[curItem.itemNameIndex].cstr()));
         //} else {
         // message.append(u"Missing Item Name");
         //}
@@ -1270,13 +1393,6 @@ const char16_t* ArchipelagoMode::getShopReplacementText(const char* fileName, co
 
     return message.cstr();
 }
-
-// void ArchipelagoMode::updateChatMessages(ArchipelagoChatMessage* packet) {
-//
-//     apChatLine1 = packet->message1;
-//     apChatLine2 = packet->message2;
-//     apChatLine3 = packet->message3;
-// }
 
 ChangeStageInfo* ArchipelagoMode::getLastERTransition() {
     if (!mCurScene || mLastERStageId.isEmpty() || mLastERStageName.isEmpty())
@@ -1298,6 +1414,12 @@ void ArchipelagoMode::clearCollectibles() {
     mCollectedCaptures.fill(0);
     mCheckedCaptures.fill(0);
     mCollectedRegionals.fill(0);
+}
+
+void ArchipelagoMode::clearScenarios() {
+    for (int i = 0; i < GameDataFunction::getWorldIndexSpecial2(); i++) {
+        setScenario(i, 1);
+    }
 }
 
 void ArchipelagoMode::sendStage(GameDataHolderWriter writer, const ChangeStageInfo* stageInfo) {
@@ -1359,12 +1481,6 @@ void ArchipelagoMode::update() {
             if (!GameDataFunction::isEnableCap(accessor)) {
                 GameDataFunction::enableCap(writer);
             }
-            // if (!GameDataFunction::isUnlockedWorld(accessor, GameDataFunction::getWorldIndexHat()))
-            //     GameDataFunction::unlockWorld(writer, GameDataFunction::getWorldIndexHat());
-
-            // if (GameDataFunction::getCurrentWorldId(accessor) != GameDataFunction::getWorldIndexWaterfall() &&
-            //     !GameDataFunction::isUnlockedWorld(accessor, GameDataFunction::getWorldIndexWaterfall()))
-            //     GameDataFunction::unlockWorld(writer, GameDataFunction::getWorldIndexWaterfall());
 
             GameProgressData* gameProgressData = accessor.mData->getGameDataFile()->getGameProgressData();
             if (gameProgressData->mUnlockWorldNum < 2) {
@@ -1375,9 +1491,6 @@ void ArchipelagoMode::update() {
             gameProgressData->mIsUnlockWorld[1] = true;
             gameProgressData->mIsFirstTimeWorld[0] = false;
             gameProgressData->mIsFirstTimeWorld[1] = false;
-
-            // if (!gameProgressData->isTalkedCapNearHomeInWaterfall())
-            //     gameProgressData->talkCapNearHomeInWaterfall();
 
             if (!GameDataFunction::isActivateHome(accessor))
                 GameDataFunction::activateHome(writer);
@@ -1392,21 +1505,12 @@ void ArchipelagoMode::update() {
                 setScenario(GameDataFunction::getWorldIndexSpecial1(), 2);
             if (getScenario(GameDataFunction::getWorldIndexHat()) < 2) {
                 setScenario(GameDataFunction::getWorldIndexHat(), 2);
-                // if (GameDataFunction::getCurrentWorldId(accessor) == GameDataFunction::getWorldIndexHat())
             }
-            sendBack();
+            if (mIsFirstConnect) {
+                mIsFirstConnect = false;
+                sendBack();
+            }
         }
-
-        // if (GameDataFunction::getCurrentWorldId(accessor) == GameDataFunction::getWorldIndexWaterfall() &&
-        //     getScenario(GameDataFunction::getWorldIndexWaterfall()) < 3 && GameDataFunction::isLaunchHome(accessor) &&
-        //     !GameDataFunction::isUnlockedWorld(accessor, GameDataFunction::getWorldIndexSand())) {
-        //     GameProgressData* gameProgressData = accessor.mData->getGameDataFile()->getGameProgressData();
-        //     if (accessor.mData->getGameDataFile()->getShineNum(GameDataFunction::getWorldIndexWaterfall()) >=
-        //             getWorldUnlockCount(GameDataFunction::getWorldIndexWaterfall()) &&
-        //         gameProgressData->mHomeLevel == 0) {
-        //         gameProgressData->mHomeStatus = GameProgressData::HomeStatus::None;
-        //     }
-        // }
 
         if (!mIsEntranceRandomizationEnabled) {
             if (GameDataFunction::getCurrentWorldId(accessor) == GameDataFunction::getWorldIndexForest() &&
@@ -1431,7 +1535,7 @@ void ArchipelagoMode::update() {
         // Cappy speech-bubble queue pump. No-op until the rs:: function
         // pointers are wired (setCappyRsCalls is called from main.cpp once
         // hk::ro::lookupSymbol resolves both) and the scene-settle gates pass.
-        tryPumpCappyMessage();
+        // tryPumpCappyMessage();
 
         mUpdateCounterTimer += 1;
         mSoftlockTimer += 1;
@@ -1626,6 +1730,7 @@ void ArchipelagoMode::enqueueCappyMessage(const char* utf8_text) {
     ++mCappyLiveCount;
 }
 
+// Should no longer be needed. Now calls functions directly via rs
 // Class-static rs:: entry-point cache definitions. See header comment.
 ArchipelagoMode::TryShowCapMessagePriorityLowFn ArchipelagoMode::sTryShowCapMessage = nullptr;
 ArchipelagoMode::IsActiveCapMessageFn ArchipelagoMode::sIsActiveCapMessage = nullptr;
@@ -1657,8 +1762,6 @@ void ArchipelagoMode::tryPumpCappyMessage() {
         return;
     if (!scene)
         return;
-    if (!sTryShowCapMessage || !sIsActiveCapMessage)
-        return;
 
     // Dual settle gate: both halves must pass. See header for the rationale
     // (frame-only fails on Ryujinx during save load; ms-only fails on real
@@ -1674,7 +1777,7 @@ void ArchipelagoMode::tryPumpCappyMessage() {
     // If our buffer is still live, wait for Nintendo's bubble pipeline to
     // finish reading it before releasing.
     if (mCappyBufferInUse) {
-        if (sIsActiveCapMessage(scene))
+        if (rs::isActiveCapMessage(scene))
             return;
         mCappyBufferInUse = false;
     }
@@ -1683,7 +1786,7 @@ void ArchipelagoMode::tryPumpCappyMessage() {
     // screen — rs::tryShowCapMessagePriorityLow would either refuse or queue
     // us indefinitely. Bump a retry counter; if we get stuck, drop the head
     // entry rather than blocking the FIFO forever.
-    if (sIsActiveCapMessage(scene)) {
+    if (rs::isActiveCapMessage(scene)) {
         ++mCappyRetryFrames;
         if (mCappyRetryFrames >= kCappyMaxRetryFrames) {
             Logger::log("[cappy] dropping head after %u frames (text='%s')\n", static_cast<unsigned>(mCappyRetryFrames), mCappyQueue[mCappyHead].text);
@@ -1712,9 +1815,9 @@ void ArchipelagoMode::tryPumpCappyMessage() {
     // PriorityLow at 0x23a910 + CapMessageShowInfo ctor at 0x23a540): the
     // function's 3rd arg lands in mWaitTime and its 4th in mDelayTime — wait
     // FIRST, delay SECOND. Opposite of the natural reading order.
-    const bool ok = sTryShowCapMessage(scene, kArchipelagoCappyLabel,
-                                       /*waitTime=*/kCappyWaitTicks,
-                                       /*delayTime=*/0);
+    const bool ok = rs::tryShowCapMessagePriorityLow(scene, kArchipelagoCappyLabel,
+                                                     /*waitTime=*/kCappyWaitTicks,
+                                                     /*delayTime=*/0);
     if (!ok) {
         mCappyBufferInUse = false;
         ++mCappyRetryFrames;
