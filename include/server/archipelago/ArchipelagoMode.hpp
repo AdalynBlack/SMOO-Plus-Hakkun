@@ -95,6 +95,9 @@ public:
     void addScoutedSouvenir(int index);
     bool hasScoutedSouvenir(int index);
 
+    void addScoutedShopMoon(int index);
+    bool hasScoutedShopMoon(int index);
+
     bool hasScoutedItem(int type, int index);
     void addScoutedItem(int type, int index);
 
@@ -339,6 +342,9 @@ private:
 
     // List of 4 u8s for tracking which souvenirs have been scouted
     sead::SafeArray<u8, 4> mScoutedSouvenirs;
+
+    // List of 4 u8s for tracking which souvenirs have been scouted
+    sead::SafeArray<u8, 2> mScoutedShopMoons;
 
     // List of 7 u8s for tracking which captures have been grabbed
     sead::SafeArray<u8, 7> mCollectedCaptures;

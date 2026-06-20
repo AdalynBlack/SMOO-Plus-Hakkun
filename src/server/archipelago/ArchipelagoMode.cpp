@@ -195,17 +195,6 @@ ChangeStageInfo* ArchipelagoMode::handleER(const ChangeStageInfo* info) {
 
     GameDataHolderAccessor accessor(mCurScene);
 
-    // if (isPartOf(info->getStageName(), "ShopStage")) {
-    //     sead::FixedSafeString<128> curStage = sead::FixedSafeString<128>();
-    //     curStage = info->getStageName();
-    //     curStage.replaceString("ShopStage", "WorldHomeStage");
-    //     accessor.mData->getGameDataFile()->setWorldId(accessor.mData->mWorldList->tryFindWorldIndexByMainStageName(curStage.cstr()));
-    //     Client::addMessage(curStage.cstr());
-    // } else {
-    //     accessor.mData->getGameDataFile()->setWorldId(
-    //         accessor.mData->mWorldList->tryFindWorldIndexByMainStageName(getWorldStageNameByRegionalCoinStageList(info->getStageName())));
-    // }
-
     sead::FixedSafeString<64> stageId = sead::FixedSafeString<64>();
     stageId = info->getChangeStageId();
 
@@ -827,6 +816,45 @@ bool ArchipelagoMode::hasScoutedSouvenir(int index) {
     return false;
 }
 
+void ArchipelagoMode::addScoutedShopMoon(int index) {
+    int shopMoons = mScoutedShopMoons[index / 8];
+
+    int curIndex = (index / 8) * 8;
+    int i = 1;
+    while (i < 0x100) {
+        if (curIndex == index) {
+            shopMoons = shopMoons | i;
+            break;
+        }
+        i = i << 1;
+        curIndex += 1;
+    }
+
+    mScoutedShopMoons[index / 8] = shopMoons;
+}
+
+bool ArchipelagoMode::hasScoutedShopMoon(int index) {
+    if (index == -1) {
+        // Client::addMessage(info->mName);
+        return false;
+    }
+
+    u8 shopMoons = mScoutedShopMoons[index / 8];
+
+    int curIndex = (index / 8) * 8;
+    int i = 1;
+    while (i < 0x100) {
+        if (curIndex == index) {
+            shopMoons = shopMoons & i;
+            return (shopMoons == i);
+        }
+        i = i << 1;
+        curIndex += 1;
+    }
+
+    return false;
+}
+
 bool ArchipelagoMode::hasScoutedItem(int type, int index) {
     switch (type) {
     case -6:
@@ -837,8 +865,11 @@ bool ArchipelagoMode::hasScoutedItem(int type, int index) {
         return hasScoutedSticker(index);
     case -8:
         return hasScoutedSouvenir(index);
+    case -10:
+        return hasScoutedShopMoon(index);
+
     default:
-        // Moon and useitem
+        // useitem
         return true;
     }
 }
@@ -1414,6 +1445,11 @@ void ArchipelagoMode::clearCollectibles() {
     mCollectedCaptures.fill(0);
     mCheckedCaptures.fill(0);
     mCollectedRegionals.fill(0);
+    mScoutedOutfits.fill(0);
+    mScoutedStickers.fill(0);
+    mScoutedSouvenirs.fill(0);
+    mScoutedShopMoons.fill(0);
+    mScoutedMoonRocks.fill(0);
 }
 
 void ArchipelagoMode::clearScenarios() {
