@@ -13,7 +13,9 @@
 
 // Helper function to check if either mode is active
 static bool isRecoveryModeActive() {
-    return GameModeManager::instance()->isModeAndActive(GameMode::FREEZETAG) || GameModeManager::instance()->isModeAndActive(GameMode::SHINETHIEF);
+    return GameModeManager::instance()->isModeAndActive(GameMode::FREEZETAG) || GameModeManager::instance()->isModeAndActive(GameMode::SHINETHIEF) ||
+           (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO) &&
+            GameModeManager::instance()->getMode<ArchipelagoMode>()->getConnectInitFlag());
 }
 
 static HkReplace<bool, MapLayout*> isCheckpointWarpAllowedHook = hk::hook::replace([](MapLayout* map) -> bool { return !isRecoveryModeActive(); });

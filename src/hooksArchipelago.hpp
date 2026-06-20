@@ -37,9 +37,6 @@ static bool isGrabShine(GameDataHolderAccessor accessor, int hintIdx) {
     ArchipelagoMode* apMode = GameModeManager::instance()->getMode<ArchipelagoMode>();
     GameDataFile::HintInfo* curHintInfo = &accessor.mData->getGameDataFile()->getHintList()[hintIdx];
     if (!curHintInfo->isGrand) {
-        if (curHintInfo->uniqueId == 205 && apMode->getScenario(1) > 1 || curHintInfo->uniqueId == 129) {
-            return true;
-        }
         return apMode->hasShine(curHintInfo->uniqueId);
     }
     return false;
@@ -488,8 +485,14 @@ bool growOnPlant(GrowFlowerPot* thisPtr) {
 // ===== Demo Hooks =====
 // _ZN16HakoniwaSequence15exeBootLoadDataEv = 0x50F29C - 0x50F304
 void onNewGameDemoStart(char* name, bool unkBool) {
-    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO))
-        GameModeManager::instance()->getMode<ArchipelagoMode>()->setConnectInitFlag(true);
+    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
+        archipelago->setConnectInitFlag(true);
+        archipelago->setFirstConnectFlag(true);
+        archipelago->clearCollectibles();
+        archipelago->clearScenarios();
+    }
+
     al::createSceneHeap(name, unkBool);
     return;
 }

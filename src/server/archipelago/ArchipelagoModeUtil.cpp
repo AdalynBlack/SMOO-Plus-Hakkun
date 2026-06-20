@@ -80,11 +80,12 @@ void ArchipelagoMode::getCustomStageId(GameDataHolderAccessor accessor, const Ch
         *stageId = "shop_lava";
     }
 
-    if (isPartOf(info->getStageName(), "SphinxEx")) {
-        *stageId = "run00";
+    if (isPartOf(stageId->cstr(), "aaa") && isPartOf(GameDataFunction::getCurrentStageName(accessor), "SandWorldHome")) {
+        *stageId = "aaaSand";
     }
 
-    if (isPartOf(info->getStageName(), "Revenge") || isPartOf(GameDataFunction::getCurrentStageName(accessor), "Picture")) {
+    if ((!isPartOf(stageId->cstr(), "A") && !isPartOf(stageId->cstr(), "B")) &&
+        (isPartOf(info->getStageName(), "Revenge") || isPartOf(GameDataFunction::getCurrentStageName(accessor), "Picture"))) {
         *stageId = "PictureBoss";
         if (isPartOf(GameDataFunction::getCurrentStageName(accessor), "Knuckle"))
             stageId->append("Knuckle");
@@ -113,6 +114,10 @@ void ArchipelagoMode::correctCustomStageId(sead::FixedSafeString<64>* toStageId)
 
     if (al::isEqualString(toStageId->cstr(), "shop_lava")) {
         *toStageId = "shop";
+    }
+
+    if (al::isEqualString(toStageId->cstr(), "aaaSand")) {
+        *toStageId = "aaa";
     }
 }
 
@@ -227,87 +232,30 @@ void ArchipelagoMode::getNearestRegional(StageScene* stageScene, PlayerActorBase
 
 void ArchipelagoMode::handleSoftLocks(GameDataHolderAccessor accessor, GameDataHolderWriter writer) {
     // softlock prevention
-    GameProgressData* gameProgressData = accessor.mData->getGameDataFile()->getGameProgressData();
     // Doesn't fix soft lock...
     // if (gameProgressData->mWaterfallWorldProgress != GameProgressData::WaterfallWorldProgress::TalkedCapNearHome) {
     //     gameProgressData->mWaterfallWorldProgress = GameProgressData::WaterfallWorldProgress::TalkedCapNearHome;
     // }
 
-    for (int i = 0; i < mStoryShineArray.size(); i++) {
-        if (mStoryShineArray[i] && hasShine(mStoryShineArray[i]->mShineIdx)) {
-            mStoryShineArray[i]->onSwitchGet();
-            // find different form of assignment
-            // mStoryShineArray[i] = nullptr;
-        }
-    }
-
-    if (accessor.mData->getGameDataFile()->isUseMissRestartInfo()) {
-        accessor.mData->getGameDataFile()->setIsUseMissRestartInfo(false);
-    }
-
-    // Lost and Ruined Odyssey softlock handling
-    if (gameProgressData->mHomeStatus == GameProgressData::HomeStatus::CrashedHome ||
-        gameProgressData->mHomeStatus == GameProgressData::HomeStatus::BossAttackedHome) {
-        gameProgressData->mHomeStatus = GameProgressData::HomeStatus::LaunchedHome;
-    }
-
     if (mSoftlockTimer >= 60) {
-        // Check and prevent crashed home softlock no longer needed
-        // if (GameDataFunction::isBossAttackedHome(accessor) && GameDataFunction::isUnlockedWorld(accessor, GameDataFunction::getWorldIndexBoss())) {
-        //     // Client::Client::addMessage(GameDataFunction::getCurrentStageName(accessor));
-        //     if (strcmp(GameDataFunction::getCurrentStageName(accessor), "BossRaidWorldHomeStage") == 0) {
-        //         GameDataFunction::repairHomeByCrashedBoss(writer);
-        //         GameDataFunction::crashHome(writer);
-        //         // isGotShine crashes game here for some reason
-        //         /*int ruinedCount = 0;
-        //         if (GameDataFunction::isGotShine(accessor, GameDataFunction::getWorldIndexBoss(),
-        //                                             0)) {
-        //             ruinedCount += 3;
-        //         }
+        GameProgressData* gameProgressData = accessor.mData->getGameDataFile()->getGameProgressData();
 
-        //         for (int i = 1; i < 9; i++) {
-        //             if (GameDataFunction::isGotShine(accessor, GameDataFunction::getWorldIndexBoss(),
-        //                                                 i)) {
-        //                 ruinedCount++;
-        //             }
-        //         }
-        //         if (ruinedCount < Client::getRaidCount()) {
-        //             GameDataFunction::repairHome(accessor);
-        //         } else {
-        //             GameDataFunction::bossAttackHome(accessor);
-        //         }*/
-        //     } else {
-        //         GameDataFunction::repairHome(writer);
-        //     }
-        // }
+        for (int i = 0; i < mStoryShineArray.size(); i++) {
+            GameDataFile::HintInfo curHintInfo = accessor.mData->getGameDataFile()->getHintList()[mStoryShineArray[i]->mShineIdx];
+            if (mStoryShineArray[i] && hasShine(curHintInfo.uniqueId) || curHintInfo.uniqueId == 205 && hasShine(shineScenarios[0].shineUid)) {
+                mStoryShineArray[i]->onSwitchGet();
+            }
+        }
 
-        // Edge case where game repairs odyssey in ruined but doesn't unlock bowser kingdom
-        // if (GameDataFunction::isRepairHomeByCrashedBoss(accessor)) {
-        //     GameDataFunction::unlockWorld(writer, GameDataFunction::getWorldIndexSky());
-        // }
+        if (accessor.mData->getGameDataFile()->isUseMissRestartInfo()) {
+            accessor.mData->getGameDataFile()->setIsUseMissRestartInfo(false);
+        }
 
-        // Check for Cloud to prevent early Odyssey in ER may be uneeded
-        // if (GameDataFunction::isUnlockedWorld(accessor, GameDataFunction::getWorldIndexCloud())) {
-        //     // Check for lost kingdom softlock state
-        //     if (GameDataFunction::isCrashHome(accessor)) {
-        //         if (strcmp(GameDataFunction::getCurrentStageName(accessor), "ClashWorldHomeStage") == 0) {
-        //             int lostCount = 0;
-        //             for (int i = 1; i < 25; i++) {
-        //                 if (GameDataFunction::isGotShine(accessor, GameDataFunction::getWorldIndexClash(), i))
-        //                     lostCount++;
-        //             }
-        //             if (lostCount < getWorldUnlockCount(GameDataFunction::getWorldIndexClash())) {
-        //                 GameDataFunction::repairHome(writer);
-        //                 GameDataFunction::unlockWorld(writer, GameDataFunction::getWorldIndexClash());
-        //             } else {
-        //                 GameDataFunction::crashHome(writer);
-        //             }
-        //         } else {
-        //             GameDataFunction::repairHome(writer);
-        //         }
-        //     }
-        // }
-
+        // Lost and Ruined Odyssey softlock handling
+        if (gameProgressData->mHomeStatus == GameProgressData::HomeStatus::CrashedHome ||
+            gameProgressData->mHomeStatus == GameProgressData::HomeStatus::BossAttackedHome) {
+            gameProgressData->mHomeStatus = GameProgressData::HomeStatus::LaunchedHome;
+        }
         mSoftlockTimer = 0;
     }
 }
@@ -355,7 +303,7 @@ int ArchipelagoMode::getRelativeWorldCoinCollectCheckGotNum(GameDataHolderAccess
         index += regionalCoinListLengths[i];
     }
 
-    return regionalCoinCheckGotNum - 1;
+    return regionalCoinCheckGotNum;
 }
 
 void ArchipelagoMode::calculateShineScenarios() {

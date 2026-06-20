@@ -20,6 +20,7 @@ struct PACKED SlotData : Packet {
     ushort bowser = 0;
     ushort dark = 0;
     ushort darker = 0;
+    u8 goal = 0;
     bool deathLink = false;
     bool captures = false;
     bool entranceRandomizer = false;

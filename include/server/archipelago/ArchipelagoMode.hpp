@@ -3,6 +3,7 @@
 #include "al/Library/Camera/CameraTicket.h"
 
 #include "game/Layout/ShopLayoutInfo.h"
+#include "game/MapObj/CapMessageShowInfo.h"
 #include "game/Sequence/ChangeStageInfo.h"
 #include "game/System/GameDataHolderWriter.h"
 
@@ -17,7 +18,27 @@
 #include "server/gamemode/GameMode.h"
 #include "server/gamemode/GameModeBase.hpp"
 
-enum CheckType { Coins = -2, Moon = -1, Clothes = 0, Cap = 1, Souvenir = 2, Sticker = 3, RegionalCoin = 4, Capture = 5 };
+enum CheckType {
+    ShopMoonScout = -10,
+    MoonRockScout = -9,
+    StickerScout = -8,
+    SouvenirScout = -7,
+    CapScout = -6,
+    ClothesScout = -5,
+    LifeUpHeart = -4,
+    LifeHeart = -3,
+    Coins = -2,
+    Moon = -1,
+    Clothes = 0,
+    Cap = 1,
+    Souvenir = 2,
+    Sticker = 3,
+    RegionalCoin = 4,
+    Capture = 5,
+    MoonRock = 6,
+    HealthUpgrade = 7,
+    WalletUpgrade = 8
+};
 
 class ArchipelagoMode : public GameModeBase {
 public:
@@ -64,6 +85,18 @@ public:
 
     bool hasItem(const ShopItem::ItemInfo* info);
     void addItem(const ShopItem::ItemInfo* info);
+
+    void addScoutedOutfit(int index);
+    bool hasScoutedOutfit(int index);
+
+    void addScoutedSticker(int index);
+    bool hasScoutedSticker(int index);
+
+    void addScoutedSouvenir(int index);
+    bool hasScoutedSouvenir(int index);
+
+    bool hasScoutedItem(int type, int index);
+    void addScoutedItem(int type, int index);
 
     void addCapture(const char* capture);
     bool hasCapture(const char* capture);
@@ -127,6 +160,8 @@ public:
     bool chooseTalkatooSpokenUtf8(int world_id, int index, char* out, u32 out_cap);
     void setConnectInitFlag(bool value) { mIsConnectInit = value; };
     bool getConnectInitFlag() { return mIsConnectInit; };
+    void setFirstConnectFlag(bool value) { mIsFirstConnect = value; };
+    bool getFirstConnectFlag() { return mIsFirstConnect; };
     void setCurWorldShineList(int worldId) { mCurWorldShineList = worldId; };
     int getCurWorldShineList() { return mCurWorldShineList; };
     void setRelativeWorldCoinCollect(int worldId) { mRelativeWorldCoinCollect = worldId; };
@@ -136,19 +171,19 @@ public:
     bool getIsNeedUpdateCounter() { return mIsNeedUpdateCounter; };
     void registerStoryShine(Shine* shine) { mStoryShineArray.pushBack(shine); };
     Shine* getStoryShine(int index) { return mStoryShineArray[index]; };
+    void setGoal(u8 value) { mGoal = value; };
+    u8 getGoal() { return mGoal; };
 
-    void setGameName(int index, const char16_t* name);
-    void setSlotName(int index, const char16_t* name);
-    void setItemName(int index, const char16_t* name);
-    void setShineItemName(int index, const char* name);
+    void setGameName(int index, const char* name);
+    void setSlotName(int index, const char* name);
+    void setItemName(int index, const char* name);
 
-    void setShineTextReplacement(int index, shineReplaceText replace);
+    void setShineTextReplacement(int index, replaceText replace);
     void setShineColors(int index, u8 replace);
     void setClothesTextReplacement(int index, shopReplaceText replace);
     void setCapTextReplacement(int index, shopReplaceText replace);
-    void setSouvenirTextReplacement(int index, shopReplaceText replace);
-    void setStickerTextReplacement(int index, shopReplaceText replace);
-    void setShopMoonTextReplacement(int index, shopReplaceText replace);
+    void setRegionalTextReplacement(int index, shopReplaceText replace);
+    void setShopMoonTextReplacement(shopReplaceText replace);
     void setOverWorldStageConnection(int index, stageConnection replace);
     void setSubAreaStageConnection(int index, stageConnection replace);
 
@@ -172,6 +207,7 @@ public:
 
     void clearArrays();
     void clearCollectibles();
+    void clearScenarios();
 
     // ===== Archipeligo Check Senders =====
     void sendMoonCheck(int uid);
@@ -254,6 +290,9 @@ private:
     short mInfoMenuPageNum = 0;
     const short mInfoMenuPageMax = 3;
 
+    // Goal
+    u8 mGoal = -1;
+
     // shine pay counts
     sead::SafeArray<int, 17> mWorldPayCounts;
     bool mDeathLinkEnabled = false;
@@ -261,6 +300,7 @@ private:
     bool mIsRecordCapture = false;
     bool mIsEntranceRandomizationEnabled = false;
     bool mIsConnectInit = false;
+    bool mIsFirstConnect = true;
 
     // ===== Talkatoo% state =====
     // mNamedShines mirrors collectedShines' packed-bitmap shape (1 bit per
@@ -315,34 +355,80 @@ private:
 
     // Moon Text Replacement Handling
     int mRecentShineHintIndex = 0;
-    sead::SafeArray<shineReplaceText, 100> shineTextReplacements;
-    sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 100> mShineItemNames;
-    sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 100> mShineSlotNames;
+    sead::SafeArray<replaceText, 100> shineTextReplacements;
+    // sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 100> mShineItemNames;
+    // sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 100> mShineSlotNames;
 
     // Moon Color Replacement
     sead::SafeArray<s8, 1170> shineColors;
 
-    // Shop Text Replacement Handling
-    sead::SafeArray<shopReplaceText, 44> shopCapTextReplacements;
-    sead::SafeArray<shopReplaceText, 44> shopClothTextReplacements;
-    sead::SafeArray<shopReplaceText, 17> shopStickerTextReplacements;
-    sead::SafeArray<shopReplaceText, 26> shopGiftTextReplacements;
-    sead::SafeArray<shopReplaceText, 13> shopMoonTextReplacements;
-    sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 144> mGameNames;
-    sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 144> mSlotNames;
-    sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 144> mItemNames;
+    // Moon model override
+    // For when custom models and the like are added
+    // sead::SafeArray<s8, 1170> mModelType;
 
+    // Shop Text Replacement Handling
+    // sead::SafeArray<shopReplaceText, 44> shopCapTextReplacements;
+    // sead::SafeArray<shopReplaceText, 44> shopClothTextReplacements;
+    // sead::SafeArray<shopReplaceText, 17> shopStickerTextReplacements;
+    // sead::SafeArray<shopReplaceText, 26> shopGiftTextReplacements;
+    // sead::SafeArray<shopReplaceText, 13> shopMoonTextReplacements;
+    // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 144> mGameNames;
+    // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 144> mSlotNames;
+    // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 144> mItemNames;
+
+    // currently around 68096 bytes
+    // go back to non wide char to save space. approx 23168 or 32.03% the space combined
+    // Convert to WFixedSafeString<APNAMESIZE> when needed
     // With only 9 slots for regional coin items that are updated upon entering a shop
+    // Less than id 20 is regional outfit
+    // 17 caps
+    // 20 outfit
+    // coin cap + outfit = 37 indexes  0 - 36
+    // 46 with regionals 37 - 45
+    // 47 with moon slot 46
+    // 147 with moon data 47 - 146
+    // 148 with moon rock 147
+    // 158 with cappy message parts 148 - 157
     // Add 100 to merge with shine slots and items
-    // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 72> mGameNames;
-    // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 72> mSlotNames;
-    // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 72> mItemNames;
+    sead::SafeArray<shopReplaceText, 17> mShopCapTextReplacements;
+    sead::SafeArray<shopReplaceText, 20> mShopClothTextReplacements;
+    sead::SafeArray<shopReplaceText, 9> mShopRegionalTextReplacements;
+    int mRegionalOffset = 0;
+    shopReplaceText mShopMoonTextReplacements;
+    sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 47> mGameNames;
+    sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 158> mSlotNames;
+    sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 158> mItemNames;
+
+    // need duplicates of theese lists in player.py for tracking current cached names state might not be needed
+
+    // coin shop item and slot names would be treated as common due to there always available nature
+    // this could free up space in a kingdoms shine replace space
+    // leaving more room for caching other data
+    // could be taken advantage of using the player.py parallel
+
+    // additional entries in slot and item will be required for achievements
+    // although they can be allieviated by just overwriting the shine
+    // replace data with them while only in the castle sub area
+    // just without removing the replace for the sub area moons
+
+    // possibly add a fixed number of entries for caching cappy message
+    // slots and items for when a slot or item needed for a cappy
+    // text box is not already stored for another textReplace
+    // possibly make a local item name table for item names local
+    // to SMO so they don't need to be fetched
+    // though the data requirements may be steep
+    // due to needed non internal names for all
+    // captures, stickers, souvenirs, and outfits
+
+    // update shineReplaceText to just replaceText (unusued itemType data becomes slot index)
+    // simplify shopReplaceText using replaceText
 
     int lastShopMoonReplaceIndex = -1;
 
-    int numApGames = 0;
-    int numApSlots = 0;
-    int numApItems = 0;
+    // slated for removal
+    // int numApGames = 0;
+    // int numApSlots = 0;
+    // int numApItems = 0;
 
     // Loading Zone Replacement
     // 239 one for each StageId
@@ -402,6 +488,10 @@ private:
     u32 mCappySettleFrames = 0;
     s64 mCappySceneChangeMs = 0;
     const al::IUseSceneObjHolder* mCappyLastScene = nullptr;
+    // Replace uses of mCappyBuffer with mSafeCappyBuffer.cstr()
+    // Make function that takes in wfixedsafestring ptr and const char*
+    // that converts the string to a wide string
+    sead::WFixedSafeString<kCappyBufferWords> mSafeCappyBuffer;
     char16_t mCappyBuffer[kCappyBufferWords] = {};
     bool mCappyBufferInUse = false;
 

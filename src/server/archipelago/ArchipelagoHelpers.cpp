@@ -2,6 +2,8 @@
 
 #include "al/Library/Base/StringUtil.h"
 
+#include "game/System/GameDataFunction.h"
+
 #include "helpers.hpp"
 
 bool isInApCostumeList(const char* costumeName) {
@@ -125,6 +127,22 @@ const char* getWorldStageNameByRegionalCoinStageList(const char* stageName) {
     return "CapWorldHomeStage";
 }
 
+int getIndexRegionalItemList(int worldId, const char* itemName) {
+    if (worldId > GameDataFunction::getWorldIndexPeach())
+        worldId = GameDataFunction::getWorldIndexPeach();
+    if (worldId > GameDataFunction::getWorldIndexBoss())
+        worldId -= 1;
+    if (worldId > GameDataFunction::getWorldIndexCloud())
+        worldId -= 1;
+
+    for (size_t i = 0; i < regionalShopItemsSizes[worldId]; i++) {
+        if (al::isEqualString(regionalShopItems[worldId][i], itemName)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 const char* intToCstr(int number) {
     sead::FixedSafeString<40> numberStr;
     numberStr = "";
@@ -140,4 +158,14 @@ const char* intToCstr(int number) {
     }
 
     return numberStr.cstr();
+}
+
+const char16_t* utf8ToUtf16(const char* original) {
+    sead::WFixedSafeString<APNAMESIZE> convert = sead::WFixedSafeString<APNAMESIZE>();
+    for (int i = 0; i < APNAMESIZE; i++) {
+        if (original[i] == '\0')
+            break;
+        convert.append(static_cast<char16_t>(original[i]));
+    }
+    return convert.cstr();
 }
