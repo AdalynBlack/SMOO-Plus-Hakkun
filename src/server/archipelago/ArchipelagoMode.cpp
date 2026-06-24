@@ -91,6 +91,7 @@ void ArchipelagoMode::init(const GameModeInitInfo& info) {
         mShopRegionalTextReplacements.fill({254, 255, 255, 255});
         // shopGiftTextReplacements.fill({254, 255, 255, 255});
         mShopMoonTextReplacements = {254, 255, 255, 255};
+        mCappyMessages = {255, 255, 255, false};
 
         mGameNames.fill(sead::FixedSafeString<APNAMESIZE>());
         mSlotNames.fill(sead::FixedSafeString<APNAMESIZE>());
@@ -103,6 +104,8 @@ void ArchipelagoMode::init(const GameModeInitInfo& info) {
         mLastERStageName = sead::FixedSafeString<128>();
         mLastExitStageId = sead::FixedSafeString<128>();
         mLastExitStageName = sead::FixedSafeString<128>();
+
+        mSafeCappyBuffer = sead::WFixedSafeString<APNAMESIZE * 3>();
 
         mStoryShineArray.allocBuffer(10, nullptr);  // max of 10 shine actors in buffer to account for story moons and multi moons
     }
@@ -130,6 +133,12 @@ void ArchipelagoMode::init(const GameModeInitInfo& info) {
     if (worldScenario > getScenario(worldId)) {
         setScenario(worldId, worldScenario);
     }
+
+    mCappyBufferInUse = false;
+    mIsBuildingCappyMessage = false;
+    if (!mIsConnectInit)
+        mIsCappyMessageActive = true;
+    mCappyMessageFrameTimer = 180;
 }
 
 void ArchipelagoMode::begin() {
@@ -1111,6 +1120,20 @@ bool ArchipelagoMode::hasRegionalCoin(int index) {
     return false;
 }
 
+void ArchipelagoMode::enqueueCappyMessage(cappyMessage message) {
+    if (message.itemType > CappyMessageTypes::CappyRegionalCoin && message.itemType < CappyMessageTypes::CappyMoonRock) {
+        message.itemIndex = mCurrentCappyQueue + 148;
+    }
+    message.slotNameIndex = mCurrentCappyQueue + 148;
+    if (mCurrentCappyMessage == mCurrentCappyQueue && !mCappyBufferInUse) {
+        mCappyMessages[mCurrentCappyQueue] = message;
+    } else {
+        mCurrentCappyQueue = (mCurrentCappyQueue + 1) % 10;
+        mCappyMessages[mCurrentCappyQueue] = message;
+    }
+    mCurrentCappyQueue = (mCurrentCappyQueue + 1) % 10;
+}
+
 void ArchipelagoMode::sendMoonCheck(int uid) {
     // Talkatoo% block. Moons the player hasn't been told about by Talkatoo
     // don't credit. The cosmetic get-cinematic still plays because we never
@@ -1568,6 +1591,8 @@ void ArchipelagoMode::update() {
 
         handleSoftLocks(accessor, writer);
 
+        tryShowCappyMessage(stageScene);
+
         // Cappy speech-bubble queue pump. No-op until the rs:: function
         // pointers are wired (setCappyRsCalls is called from main.cpp once
         // hk::ro::lookupSymbol resolves both) and the scene-settle gates pass.
@@ -1653,6 +1678,9 @@ bool ArchipelagoMode::infoMenu() {
     const char* captureText = mCapturesEnabled ? "Enabled" : "Disabled";
     const char* erText = mIsEntranceRandomizationEnabled ? "Enabled" : "Disabled";
     const char* dlText = mDeathLinkEnabled ? "Enabled" : "Disabled";
+    const char* isCappyText = mIsCappyMessageActive ? "Active" : "Inactive";
+    const char* isCappyBuffer = mCappyBufferInUse ? "In use" : "Not in use";
+    const char* isCappyBuilder = mIsBuildingCappyMessage ? "Building" : "Not Building";
 
     switch (mInfoMenuPageNum) {
     case 0:
@@ -1677,6 +1705,11 @@ bool ArchipelagoMode::infoMenu() {
         ImGui::Text("Current Regional Coin World ID: %d", mRelativeWorldCoinCollect);
         ImGui::Text("\nCurrent last stage ID: \n%s", mLastERStageId.cstr());
         ImGui::Text("\nCurrent last stage name: \n%s", mLastERStageName.cstr());
+        ImGui::Text("\nLast Exit stage ID: \n%s", mLastExitStageId.cstr());
+        ImGui::Text("\nLast Exit stage name: \n%s", mLastExitStageName.cstr());
+        ImGui::Text("\nCappy Message Active: %s", isCappyText);
+        ImGui::Text("\nCappy Message Buffer: %s", isCappyBuffer);
+        ImGui::Text("\nCappy Message Building: %s", isCappyBuilder);
         break;
     }
 
@@ -1742,39 +1775,29 @@ s64 cappyNowMs() {
 
 }  // namespace
 
-void ArchipelagoMode::enqueueCappyMessage(const char* utf8_text) {
-    if (!utf8_text || utf8_text[0] == '\0')
-        return;
-    if (mCappyLiveCount >= kCappyQueueCap) {
-        // Drop newest. Matches smo_archipelago CappyMessenger behavior — the
-        // dropped item is recent (likely a stale notification from a bulk
-        // replay) and queued items are older and more representative of what
-        // the player has been waiting on.
-        Logger::log("[cappy] queue full (cap=%u) — dropping '%s'\n", static_cast<unsigned>(kCappyQueueCap), utf8_text);
-        return;
-    }
-    CappyEntry& e = mCappyQueue[mCappyTail];
-    // strncpy with explicit NUL termination — strlcpy isn't available.
-    u32 i = 0;
-    while (utf8_text[i] != '\0' && i + 1 < kCappyTextCap) {
-        e.text[i] = utf8_text[i];
-        ++i;
-    }
-    e.text[i] = '\0';
-    e.live = true;
-    mCappyTail = (mCappyTail + 1) % kCappyQueueCap;
-    ++mCappyLiveCount;
-}
-
-// Should no longer be needed. Now calls functions directly via rs
-// Class-static rs:: entry-point cache definitions. See header comment.
-ArchipelagoMode::TryShowCapMessagePriorityLowFn ArchipelagoMode::sTryShowCapMessage = nullptr;
-ArchipelagoMode::IsActiveCapMessageFn ArchipelagoMode::sIsActiveCapMessage = nullptr;
-
-void ArchipelagoMode::setCappyRsCalls(TryShowCapMessagePriorityLowFn tryShow, IsActiveCapMessageFn isActive) {
-    sTryShowCapMessage = tryShow;
-    sIsActiveCapMessage = isActive;
-}
+// void ArchipelagoMode::enqueueCappyMessage(const char* utf8_text) {
+//     if (!utf8_text || utf8_text[0] == '\0')
+//         return;
+//     if (mCappyLiveCount >= kCappyQueueCap) {
+//         // Drop newest. Matches smo_archipelago CappyMessenger behavior — the
+//         // dropped item is recent (likely a stale notification from a bulk
+//         // replay) and queued items are older and more representative of what
+//         // the player has been waiting on.
+//         Logger::log("[cappy] queue full (cap=%u) — dropping '%s'\n", static_cast<unsigned>(kCappyQueueCap), utf8_text);
+//         return;
+//     }
+//     CappyEntry& e = mCappyQueue[mCappyTail];
+//     // strncpy with explicit NUL termination — strlcpy isn't available.
+//     u32 i = 0;
+//     while (utf8_text[i] != '\0' && i + 1 < kCappyTextCap) {
+//         e.text[i] = utf8_text[i];
+//         ++i;
+//     }
+//     e.text[i] = '\0';
+//     e.live = true;
+//     mCappyTail = (mCappyTail + 1) % kCappyQueueCap;
+//     ++mCappyLiveCount;
+// }
 
 void ArchipelagoMode::tryPumpCappyMessage() {
     const al::IUseSceneObjHolder* scene = mCurScene;
@@ -1886,7 +1909,6 @@ const char16_t* ArchipelagoMode::lookupCappyMessageSubstitution(const char* labe
         return nullptr;
     if (strcmp(label, kArchipelagoCappyLabel) != 0)
         return nullptr;
-    if (!mCappyBufferInUse)
-        return nullptr;
-    return mCappyBuffer;
+
+    return mSafeCappyBuffer.cstr();
 }

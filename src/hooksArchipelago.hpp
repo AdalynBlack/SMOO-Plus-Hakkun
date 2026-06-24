@@ -812,40 +812,76 @@ static HkTrampoline<bool, GameDataFile*, int, int> tryUnlockShineNameHook = hk::
 
 static HkTrampoline<bool, const al::IUseMessageSystem*, const char*, const char*> isExistLabelInSystemMessageHook =
     hk::hook::trampoline([](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> bool {
-        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-            if (GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label) != nullptr) {
-                return true;
-            }
-        }
+        // if (GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        //     if (GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label) != nullptr) {
+        //         return true;
+        //     }
+        // }
         return isExistLabelInSystemMessageHook.orig(sys, mstxt, label);
     });
 
 static HkTrampoline<const char16_t*, const al::IUseMessageSystem*, const char*, const char*> getSystemMessageStringTrampolineHook =
     hk::hook::trampoline([](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> const char16_t* {
-        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-            const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label);
-            if (sub)
-                return sub;
-        }
+        // if (Client::instance() && GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        //     const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label);
+        //     if (sub)
+        //         return sub;
+        // }
         return getSystemMessageStringTrampolineHook.orig(sys, mstxt, label);
     });
 
 static HkTrampoline<bool, const al::IUseMessageSystem*, const char*, const char*> isExistLabelInStageMessageHook =
     hk::hook::trampoline([](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> bool {
-        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-            if (GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label) != nullptr) {
-                return true;
-            }
-        }
+        // if (Client::instance() && GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        //     if (GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label) != nullptr) {
+        //         return true;
+        //     }
+        // }
         return isExistLabelInStageMessageHook.orig(sys, mstxt, label);
     });
 
 static HkTrampoline<const char16_t*, const al::IUseMessageSystem*, const char*, const char*> getStageMessageStringHook =
     hk::hook::trampoline([](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> const char16_t* {
-        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-            const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label);
-            if (sub)
-                return sub;
-        }
+        // if (Client::instance() && GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
+        //     const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label);
+        //     if (sub)
+        //         return sub;
+        // }
         return getStageMessageStringHook.orig(sys, mstxt, label);
     });
+
+static bool isExistCappyLabelInSystemMessageHook(const al::IUseMessageSystem* sys, const char* mstxt, const char* label) {
+    if (GameModeManager::instance() && GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        if (GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label) != nullptr) {
+            return true;
+        }
+    }
+    return al::isExistLabelInSystemMessage(sys, mstxt, label);
+}
+
+static const char16_t* getSystemMessageCappyStringHook(const al::IUseMessageSystem* sys, const char* mstxt, const char* label) {
+    if (GameModeManager::instance() && GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label);
+        if (sub)
+            return sub;
+    }
+    return al::getSystemMessageString(sys, mstxt, label);
+}
+
+static bool isExistCappyLabelInStageMessageHook(const al::IUseMessageSystem* sys, const char* mstxt, const char* label) {
+    if (GameModeManager::instance() && GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        if (GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label) != nullptr) {
+            return true;
+        }
+    }
+    return al::isExistLabelInStageMessage(sys, mstxt, label);
+}
+
+static const char16_t* getStageMessageCappyStringHook(const al::IUseMessageSystem* sys, const char* mstxt, const char* label) {
+    if (GameModeManager::instance() && GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label);
+        if (sub)
+            return sub;
+    }
+    return al::getStageMessageString(sys, mstxt, label);
+}

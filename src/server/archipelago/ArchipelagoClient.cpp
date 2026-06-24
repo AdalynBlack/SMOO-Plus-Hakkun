@@ -258,7 +258,10 @@ void Client::receiveCheck(Check* packet) {
         return;
     }
 
+    ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
     int itemType = packet->itemType;
+    archipelago->setCappySlotName(packet->senderName);
+    cappyMessage gotItemMessage = {255, 255, 255, false};
 
     // struct ShopItem::ShopAmiiboInfo amiiboData = {1, 1};
     struct ShopItem::ItemInfo info = {};
@@ -286,7 +289,7 @@ void Client::receiveCheck(Check* packet) {
     switch (itemType) {
     case CheckType::Coins:
         // setMessage(3, "Coins Received");
-        if (GameModeManager::instance()->getMode<ArchipelagoMode>()->getCheckIndex() < packet->index) {
+        if (archipelago->getCheckIndex() < packet->index) {
             GameDataFunction::addCoin(writer, packet->amount);
             updateIndex = true;
         }
@@ -296,8 +299,10 @@ void Client::receiveCheck(Check* packet) {
         if (collectedShineCount < curCollectedShines.size() - 1) {
             curCollectedShines[collectedShineCount] = packet->locationId;
             collectedShineCount++;
-            GameModeManager::instance()->getMode<ArchipelagoMode>()->setIsNeedUpdateCounter(true);
+            archipelago->setIsNeedUpdateCounter(true);
         }
+        gotItemMessage.itemType = packet->amount > 15 ? CappyMessageTypes::CappyMultiMoon : CappyMessageTypes::CappyMoon;
+        gotItemMessage.itemIndex = packet->amount % 17;
         break;
 
     case CheckType::Clothes:
@@ -305,10 +310,13 @@ void Client::receiveCheck(Check* packet) {
         info.type = static_cast<ShopItem::ItemType>(itemType);
         infoPtr = &info;
         writer.mData->mPlayingFile->buyItem(infoPtr, false);
-        if (GameModeManager::instance()->getMode<ArchipelagoMode>()->getCheckIndex() < packet->index) {
+        if (archipelago->getCheckIndex() < packet->index) {
             GameDataFunction::wearCostume(writer, info.name);
             updateIndex = true;
         }
+        archipelago->setCappyItemName(packet->objId);
+        gotItemMessage.itemType = CappyMessageTypes::CappyClothes;
+        gotItemMessage.itemIndex = packet->locationId;
         break;
 
     case CheckType::Cap:
@@ -316,10 +324,13 @@ void Client::receiveCheck(Check* packet) {
         info.type = static_cast<ShopItem::ItemType>(itemType);
         infoPtr = &info;
         writer.mData->mPlayingFile->buyItem(infoPtr, false);
-        if (GameModeManager::instance()->getMode<ArchipelagoMode>()->getCheckIndex() < packet->index) {
+        if (archipelago->getCheckIndex() < packet->index) {
             GameDataFunction::wearCap(writer, info.name);
             updateIndex = true;
         }
+        archipelago->setCappyItemName(packet->objId);
+        gotItemMessage.itemType = CappyMessageTypes::CappyCap;
+        gotItemMessage.itemIndex = packet->locationId;
         break;
 
     case CheckType::Souvenir:
@@ -327,6 +338,9 @@ void Client::receiveCheck(Check* packet) {
         info.type = static_cast<ShopItem::ItemType>(itemType);
         infoPtr = &info;
         writer.mData->mPlayingFile->buyItem(infoPtr, false);
+        archipelago->setCappyItemName(packet->objId);
+        gotItemMessage.itemType = CappyMessageTypes::CappySouvenir;
+        gotItemMessage.itemIndex = packet->locationId;
         break;
 
     case CheckType::Sticker:
@@ -334,6 +348,9 @@ void Client::receiveCheck(Check* packet) {
         info.type = static_cast<ShopItem::ItemType>(itemType);
         infoPtr = &info;
         writer.mData->mPlayingFile->buyItem(infoPtr, false);
+        archipelago->setCappyItemName(packet->objId);
+        gotItemMessage.itemType = CappyMessageTypes::CappySticker;
+        gotItemMessage.itemIndex = packet->locationId;
         break;
 
     case CheckType::RegionalCoin:
@@ -354,14 +371,19 @@ void Client::receiveCheck(Check* packet) {
             recCoin.append(packet->stage);
             // addMessage(recCoin.cstr());
         }
+        gotItemMessage.itemType = CappyMessageTypes::CappyRegionalCoin;
+        gotItemMessage.itemIndex = packet->amount;
         break;
 
     case CheckType::Capture:
-        GameModeManager::instance()->getMode<ArchipelagoMode>()->addCapture(captureListNames[packet->locationId]);
+        archipelago->addCapture(captureListNames[packet->locationId]);
         GameDataFunction::addHackDictionary(writer, captureListNames[packet->locationId]);
         recCheck = "Received Capture ";
         recCheck.append(captureListNames[packet->locationId]);
         // addMessage(recCheck.cstr());
+        archipelago->setCappyItemName(packet->objId);
+        gotItemMessage.itemType = CappyMessageTypes::CappyCapture;
+        gotItemMessage.itemIndex = packet->locationId;
         break;
 
     default:
@@ -372,8 +394,10 @@ void Client::receiveCheck(Check* packet) {
     }
 
     if (updateIndex) {
-        GameModeManager::instance()->getMode<ArchipelagoMode>()->setCheckIndex(packet->index);
+        archipelago->setCheckIndex(packet->index);
     }
+
+    archipelago->enqueueCappyMessage(gotItemMessage);
 }
 
 void Client::receiveDeath(Deathlink* packet) {
@@ -390,6 +414,8 @@ void Client::updateSlotData(SlotData* packet) {
     if (archipelagoInfo) {
         archipelagoInfo->mIsClientConnected = ArchipelagoState::CLIENT_CONNECTED;
         archipelago->setConnectInitFlag(true);
+        archipelago->setCappySlotName(getArchipelagoSlot());
+        archipelago->enqueueCappyMessage({255, CappyMessageTypes::CappyConnect, 0, false});
     } else
         return;
     archipelago->setWorldUnlockCount(1, packet->cascade);
@@ -892,6 +918,9 @@ void Client::updateShopReplace(ShopReplacePacket* packet) {
         // Shop Moon
         if (type == 3) {
             archipelago->setShopMoonTextReplacement({packet->gameIndex0, packet->playerIndex0, packet->itemIndex0, packet->itemClassification0});
+        }
+        if (type == 4) {
+            archipelago->enqueueCappyMessage({packet->gameIndex0, packet->playerIndex0, packet->itemIndex0, static_cast<bool>(packet->itemClassification0)});
         }
 
         // Over world

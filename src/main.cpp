@@ -1150,11 +1150,22 @@ extern "C" void hkMain() {
     // getSystemMessageStringTrampolineHook.installAtSym<"_ZN2al22getSystemMessageStringEPKNS_17IUseMessageSystemEPKcS4_">();
     // isExistLabelInStageMessageHook.installAtSym<"_ZN2al26isExistLabelInStageMessageEPKNS_17IUseMessageSystemEPKcS4_">();
     // getStageMessageStringHook.installAtSym<"_ZN2al21getStageMessageStringEPKNS_17IUseMessageSystemEPKcS4_">();
+    // hk::hook::writeBranchLinkAtMainOffset(0x3302F8, isExistCappyLabelInSystemMessageHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x3303E4, getSystemMessageCappyStringHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x330494, getStageMessageCappyStringHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x33049c, getSystemMessageCappyStringHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x330174, getSystemMessageCappyStringHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x93a290, getMessageHolderHook);
 
-    // // rs:: function-pointer wiring. tryPumpCappyMessage's dispatch path
-    // // skips when either pointer is null, so a lookup failure here leaves
-    // // the queue accumulating but never firing — visible as enqueueCappyMessage
-    // // logs without corresponding bubble dispatches.
+    hk::hook::writeBranchLinkAtMainOffset(0x1dcb8c, isExistCappyLabelInSystemMessageHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x1dcbc4, getSystemMessageCappyStringHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x1dcb4c, isExistCappyLabelInStageMessageHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x1dcb84, getStageMessageCappyStringHook);
+
+    // rs:: function-pointer wiring. tryPumpCappyMessage's dispatch path
+    // skips when either pointer is null, so a lookup failure here leaves
+    // the queue accumulating but never firing — visible as enqueueCappyMessage
+    // logs without corresponding bubble dispatches.
     // {
     //     const ptr tryShow = hk::ro::lookupSymbol("_ZN2rs28tryShowCapMessagePriorityLowEPKN2al18IUseSceneObjHolderEPKcii");
     //     const ptr isActive = hk::ro::lookupSymbol("_ZN2rs18isActiveCapMessageEPKN2al18IUseSceneObjHolderE");

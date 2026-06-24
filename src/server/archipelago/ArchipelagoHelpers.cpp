@@ -160,12 +160,80 @@ const char* intToCstr(int number) {
     return numberStr.cstr();
 }
 
-const char16_t* utf8ToUtf16(const char* original) {
-    sead::WFixedSafeString<APNAMESIZE> convert = sead::WFixedSafeString<APNAMESIZE>();
-    for (int i = 0; i < APNAMESIZE; i++) {
-        if (original[i] == '\0')
-            break;
-        convert.append(static_cast<char16_t>(original[i]));
+const char16_t* utf8ToUtf16(const char* src) {
+    sead::WFixedSafeString<APNAMESIZE> out = sead::WFixedSafeString<APNAMESIZE>();
+
+    u32 i = 0;
+    u32 o = 0;
+    while (src[i] != '\0' && o + 1 < out.getBufferSize()) {
+        const unsigned char b0 = static_cast<unsigned char>(src[i]);
+        if (b0 < 0x80) {
+            out.append(static_cast<char16_t>(b0));
+            ++i;
+        } else if ((b0 & 0xE0) == 0xC0 && src[i + 1] != '\0') {
+            const unsigned char b1 = static_cast<unsigned char>(src[i + 1]);
+            out.append(static_cast<char16_t>(((b0 & 0x1F) << 6) | (b1 & 0x3F)));
+            i += 2;
+        } else if ((b0 & 0xF0) == 0xE0 && src[i + 1] != '\0' && src[i + 2] != '\0') {
+            const unsigned char b1 = static_cast<unsigned char>(src[i + 1]);
+            const unsigned char b2 = static_cast<unsigned char>(src[i + 2]);
+            out.append(static_cast<char16_t>(((b0 & 0x0F) << 12) | ((b1 & 0x3F) << 6) | (b2 & 0x3F)));
+            i += 3;
+        } else {
+            // Malformed lead byte — skip and continue rather than UB.
+            ++i;
+        }
     }
-    return convert.cstr();
+
+    return out.cstr();
+}
+
+void appendUtf8ToUtf16(const char* src, sead::WFixedSafeString<APNAMESIZE * 3>* dest) {
+    sead::WFixedSafeString<APNAMESIZE> out = sead::WFixedSafeString<APNAMESIZE>();
+
+    u32 i = 0;
+    u32 o = 0;
+    while (src[i] != '\0' && o + 1 < out.getBufferSize()) {
+        const unsigned char b0 = static_cast<unsigned char>(src[i]);
+        if (b0 < 0x80) {
+            out.append(static_cast<char16_t>(b0));
+            ++i;
+        } else if ((b0 & 0xE0) == 0xC0 && src[i + 1] != '\0') {
+            const unsigned char b1 = static_cast<unsigned char>(src[i + 1]);
+            out.append(static_cast<char16_t>(((b0 & 0x1F) << 6) | (b1 & 0x3F)));
+            i += 2;
+        } else if ((b0 & 0xF0) == 0xE0 && src[i + 1] != '\0' && src[i + 2] != '\0') {
+            const unsigned char b1 = static_cast<unsigned char>(src[i + 1]);
+            const unsigned char b2 = static_cast<unsigned char>(src[i + 2]);
+            out.append(static_cast<char16_t>(((b0 & 0x0F) << 12) | ((b1 & 0x3F) << 6) | (b2 & 0x3F)));
+            i += 3;
+        } else {
+            // Malformed lead byte — skip and continue rather than UB.
+            ++i;
+        }
+    }
+
+    dest->append(out.cstr());
+}
+
+const char16_t* getRegionalCoinIcon(int worldId) {
+    sead::WFixedSafeString<APNAMESIZE> icon = sead::WFixedSafeString<8>();
+    icon.append(0x000e);
+    icon.append(0x0008);
+    icon.append(regionalIcons1[worldId]);
+    icon.append(0x0004);
+    icon.append(0x0006);
+    icon.append(regionalIcons2[worldId]);
+    return icon.cstr();
+}
+
+void getColor(ProjectTextColors color, sead::WBufferedSafeString* str) {
+    // sead::WFixedSafeString<APNAMESIZE> colorTag = sead::WFixedSafeString<8>();
+    str->append(0x0000);
+    str->append(0x000e);
+    str->append(0x0003);
+    str->append(0x0002);
+    str->append(color);
+
+    // return colorTag.cstr();
 }

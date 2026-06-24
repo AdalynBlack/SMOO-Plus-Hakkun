@@ -114,6 +114,8 @@ public:
     bool hasRegionalCoin(const char* placementId);
     bool hasRegionalCoin(int index);
 
+    void enqueueCappyMessage(cappyMessage message);
+
     void setCheckIndex(int index);
     int getCheckIndex() { return mCheckIndex; };
 
@@ -180,6 +182,8 @@ public:
     void setGameName(int index, const char* name);
     void setSlotName(int index, const char* name);
     void setItemName(int index, const char* name);
+    void setCappySlotName(const char* name) { mSlotNames[148 + mCurrentCappyQueue] = name; };
+    void setCappyItemName(const char* name) { mItemNames[148 + mCurrentCappyQueue] = name; };
 
     void setShineTextReplacement(int index, replaceText replace);
     void setShineColors(int index, u8 replace);
@@ -238,14 +242,11 @@ public:
     // hk::ro::lookupSymbol resolves the two rs:: entry points. Until both are
     // non-null, tryPumpCappyMessage is a no-op and queued entries accumulate
     // (capped at kCappyQueueCap).
-    void enqueueCappyMessage(const char* utf8_text);
+    // void enqueueCappyMessage(const char* utf8_text);
     void tryPumpCappyMessage();
     const char16_t* lookupCappyMessageSubstitution(const char* label) const;
-    using TryShowCapMessagePriorityLowFn = bool (*)(const al::IUseSceneObjHolder*, const char*, int, int);
-    using IsActiveCapMessageFn = bool (*)(const al::IUseSceneObjHolder*);
     // STATIC because main.cpp::hkMain installs these at module init, before
     // any ArchipelagoMode instance is created.
-    static void setCappyRsCalls(TryShowCapMessagePriorityLowFn tryShow, IsActiveCapMessageFn isActive);
 
     // Magic label CapMessageLayout queries when our enqueue is active. Keep
     // this distinctive — any vanilla MSBT key collision would route Nintendo's
@@ -269,6 +270,8 @@ public:
     int getRelativeWorldCoinCollectCheckGotNum(GameDataHolderAccessor accessor);
     void calculateShineScenarios();
     int getSubAreaScenario(const char* toStageName);
+    bool tryShowCappyMessage(StageScene* curScene);
+    void buildCappyMessage();
 
 private:
     al::WipeHolder* mWipeHolder = nullptr;  // Pointer set by setWipeHolder on first step of hakoniwaSequence hook
@@ -362,8 +365,6 @@ private:
     // Moon Text Replacement Handling
     int mRecentShineHintIndex = 0;
     sead::SafeArray<replaceText, 100> shineTextReplacements;
-    // sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 100> mShineItemNames;
-    // sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 100> mShineSlotNames;
 
     // Moon Color Replacement
     sead::SafeArray<s8, 1170> shineColors;
@@ -372,42 +373,30 @@ private:
     // For when custom models and the like are added
     // sead::SafeArray<s8, 1170> mModelType;
 
-    // Shop Text Replacement Handling
-    // sead::SafeArray<shopReplaceText, 44> shopCapTextReplacements;
-    // sead::SafeArray<shopReplaceText, 44> shopClothTextReplacements;
-    // sead::SafeArray<shopReplaceText, 17> shopStickerTextReplacements;
-    // sead::SafeArray<shopReplaceText, 26> shopGiftTextReplacements;
-    // sead::SafeArray<shopReplaceText, 13> shopMoonTextReplacements;
-    // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 144> mGameNames;
-    // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 144> mSlotNames;
-    // sead::SafeArray<sead::WFixedSafeString<APNAMESIZE>, 144> mItemNames;
-
-    // currently around 68096 bytes
-    // go back to non wide char to save space. approx 23168 or 32.03% the space combined
-    // Convert to WFixedSafeString<APNAMESIZE> when needed
-    // With only 9 slots for regional coin items that are updated upon entering a shop
-    // Less than id 20 is regional outfit
     // 17 caps
-    // 20 outfit
+    sead::SafeArray<shopReplaceText, 17> mShopCapTextReplacements;
+    // 20 outfits
+    sead::SafeArray<shopReplaceText, 20> mShopClothTextReplacements;
+    // 9 slots to correspond with the maximum regional items in one shop
+    sead::SafeArray<shopReplaceText, 9> mShopRegionalTextReplacements;
+    // Offsets Regional Text Replacement index bu the number of Caps in a shop
+    // This guarantees replacements are alligned with the correct item
+    int mRegionalOffset = 0;
+    // One shop moon slot per world
+    shopReplaceText mShopMoonTextReplacements;
     // coin cap + outfit = 37 indexes  0 - 36
     // 46 with regionals 37 - 45
     // 47 with moon slot 46
-    // 147 with moon data 47 - 146
-    // 148 with moon rock 147
-    // 158 with cappy message parts 148 - 157
-    // Add 100 to merge with shine slots and items
-    sead::SafeArray<shopReplaceText, 17> mShopCapTextReplacements;
-    sead::SafeArray<shopReplaceText, 20> mShopClothTextReplacements;
-    sead::SafeArray<shopReplaceText, 9> mShopRegionalTextReplacements;
-    int mRegionalOffset = 0;
-    shopReplaceText mShopMoonTextReplacements;
     sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 47> mGameNames;
+    // moon data 47 - 146
+    // moon rock 147
+    // cappy message parts 148 - 157
+    // coin shop item and slot names would be treated as common due to there always available nature
     sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 158> mSlotNames;
     sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 158> mItemNames;
 
     // need duplicates of theese lists in player.py for tracking current cached names state might not be needed
 
-    // coin shop item and slot names would be treated as common due to there always available nature
     // this could free up space in a kingdoms shine replace space
     // leaving more room for caching other data
     // could be taken advantage of using the player.py parallel
@@ -417,24 +406,9 @@ private:
     // replace data with them while only in the castle sub area
     // just without removing the replace for the sub area moons
 
-    // possibly add a fixed number of entries for caching cappy message
-    // slots and items for when a slot or item needed for a cappy
-    // text box is not already stored for another textReplace
-    // possibly make a local item name table for item names local
-    // to SMO so they don't need to be fetched
-    // though the data requirements may be steep
-    // due to needed non internal names for all
-    // captures, stickers, souvenirs, and outfits
-
-    // update shineReplaceText to just replaceText (unusued itemType data becomes slot index)
     // simplify shopReplaceText using replaceText
 
     int lastShopMoonReplaceIndex = -1;
-
-    // slated for removal
-    // int numApGames = 0;
-    // int numApSlots = 0;
-    // int numApItems = 0;
 
     // Loading Zone Replacement
     // 239 one for each StageId
@@ -453,10 +427,25 @@ private:
     sead::FixedSafeString<128> mLastExitStageId;
     sead::FixedSafeString<128> mLastExitStageName;
 
+    // Array for storing all story shines and multi moons in a given stage
+    // For activating onSwitchGet behaviors when loading into a stage
     sead::PtrArray<Shine> mStoryShineArray;
 
+    // World index used by shine list total count fetching
     int mCurWorldShineList = 0;
+
+    // The world relative to the type of
+    // regionals coins found in a stage
     int mRelativeWorldCoinCollect = -1;
+
+    sead::SafeArray<cappyMessage, 10> mCappyMessages;
+    int mCurrentCappyMessage = 0;
+    int mCurrentCappyQueue = 0;
+    bool mIsCappyMessageActive = false;
+    bool mIsBuildingCappyMessage = false;
+    int mCappyMessageFrameTimer = 0;
+
+    sead::WFixedSafeString<APNAMESIZE * 3> mSafeCappyBuffer;
 
     // ===== Cappy Messenger state =====
     // Small circular UTF-8 queue + a single live UTF-16 buffer that
@@ -497,13 +486,6 @@ private:
     // Replace uses of mCappyBuffer with mSafeCappyBuffer.cstr()
     // Make function that takes in wfixedsafestring ptr and const char*
     // that converts the string to a wide string
-    sead::WFixedSafeString<kCappyBufferWords> mSafeCappyBuffer;
-    char16_t mCappyBuffer[kCappyBufferWords] = {};
+    char16_t mCappyBuffer[APNAMESIZE * 3] = {};
     bool mCappyBufferInUse = false;
-
-    // rs:: entry-point cache. Class-static so main.cpp::hkMain can populate
-    // these before any ArchipelagoMode instance exists. tryPumpCappyMessage
-    // reads them; if either is null the pump no-ops.
-    static TryShowCapMessagePriorityLowFn sTryShowCapMessage;
-    static IsActiveCapMessageFn sIsActiveCapMessage;
 };

@@ -109,7 +109,7 @@ GameModeConfigMenu::UpdateAction ArchipelagoConfigMenu::updateMenu(int selectInd
                 }
             }
         }
-        return GameModeConfigMenu::UpdateAction::CLOSE;
+        return GameModeConfigMenu::UpdateAction::NOOP;
     }
     case 1: {
         Client::setConnectStatusMsg(u"Connecting to Client...");

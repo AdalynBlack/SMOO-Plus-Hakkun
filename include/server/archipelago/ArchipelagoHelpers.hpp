@@ -1452,7 +1452,44 @@ __attribute__((used)) static const char* stageIdList[] = {"jizo01",
                                                           "aaaSand"};
 
 // Used for Cappy Message Building
-__attribute__((used)) static const char* SMOItems[] = {"Power Moon", "Multi-Moon", "Regional Coin", "Shop Item", "Capture", "Moon Rock"};
+__attribute__((used)) static const char* SMOItems[] = {"Connect",  "Power Moon", "Multi-Moon", "Regional Coin", "Cap",      "Clothes", "Sticker",
+                                                       "Souvenir", "Capture",    "Moon Rock",  "Missing1",      "Missing2", "Coins"};
+__attribute__((used)) static const char* kingdoms[] = {"Cap",  "Cascade",  "Sand",   "Wooded", "Lake", "Lost",     "Cloud",     "Metro",      "Seaside",
+                                                       "Snow", "Luncheon", "Ruined", "Bowser", "Moon", "Mushroom", "Dark Side", "Darker Side"};
+__attribute__((used)) static const char16_t regionalIcons1[] = {0x0010, 0x0011, 0x0012, 0x0013, 0x0014, 0x0000, 0x0015, 0x0016, 0x0017,
+                                                                0x0018, 0x0019, 0x0000, 0x001a, 0x001b, 0x001c, 0x001b, 0x001b};
+__attribute__((used)) static const char16_t regionalIcons2[] = {
+    0x0050, 0x0051, 0x0052, 0x0053, 0x0054, 0x0001, 0x0055, 0x0056, 0x0057, 0x0058, 0x0059, 0x0001, 0x005a, 0x005b, 0x005c, 0x005b, 0x005b,
+};
+
+__attribute__((used)) static const char16_t miscIcons1[] = {0x0031, 0x0000};
+// Lifeup, Coin
+
+__attribute__((used)) static const char16_t miscIcons2[] = {0x0037, 0x0040};
+
+__attribute__((used)) static const char16_t color1[] = {0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007, 0xffff};
+__attribute__((used)) static const char16_t color2[] = {0x0006, 0x0005, 0x0004, 0x0005, 0x0005, 0x0004, 0x0005, 0x0000, 0x0000};
+
+enum ProjectTextColors {
+    Black = 0x0000,
+    Yellow = 0x0001,
+    White = 0x0002,
+    Red = 0x0003,
+    Green = 0x0004,
+    Blue = 0x0005,
+    Gray = 0x0006,
+    Rough = 0x0007,
+    ResetColor = 0xffff,
+};
+
+__attribute__((used)) static const char* itemSystemMessageFiles[] = {
+    "ItemCap",
+    "ItemCloth",
+    "ItemSticker",
+    "ItemGift",
+    "HackList"
+    "ItemMoon",
+};
 
 struct stageConnection {
     short toStageIdIndex;
@@ -1464,16 +1501,33 @@ struct replaceText {
     u8 itemNameIndex;
 };
 
-// struct shineReplaceText {
-//     s8 itemType;
-//     u8 shineItemNameIndex;
-// };
-
 struct shopReplaceText {
     u8 gameIndex;
     u8 slotNameIndex;
     u8 itemNameIndex;
     u8 itemClassification;
+};
+
+enum CappyMessageTypes {
+    CappyConnect = 0,
+    CappyMoon = 1,
+    CappyMultiMoon = 2,
+    CappyRegionalCoin = 3,
+    CappyCap = 4,
+    CappyClothes = 5,
+    CappySticker = 6,
+    CappySouvenir = 7,
+    CappyCapture = 8,
+    CappyMoonRock = 9,
+    CappyHealthUpgrade = 10,
+    CappyWalletUpgrade = 11
+};
+
+struct cappyMessage {
+    u8 slotNameIndex;
+    u8 itemType;
+    u8 itemIndex;
+    bool isOutgoing;
 };
 
 struct scenarioShine {
@@ -1503,4 +1557,7 @@ const char* getWorldStageNameByRegionalCoinStageList(const char* stageName);
 int getIndexRegionalItemList(int worldId, const char* itemName);
 
 const char* intToCstr(int number);
-const char16_t* utf8ToUtf16(const char* original);
+const char16_t* utf8ToUtf16(const char* src);
+void appendUtf8ToUtf16(const char* src, sead::WFixedSafeString<64 * 3>* dest);
+const char16_t* getRegionalCoinIcon(int worldId);
+void getColor(ProjectTextColors color, sead::WBufferedSafeString* str);
