@@ -260,6 +260,7 @@ void Client::receiveCheck(Check* packet) {
 
     ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
     int itemType = packet->itemType;
+    bool isLocal = packet->senderName[0] == '\0';
     archipelago->setCappySlotName(packet->senderName);
     cappyMessage gotItemMessage = {255, 255, 255, false};
 
@@ -273,7 +274,7 @@ void Client::receiveCheck(Check* packet) {
 
     struct ShopItem::ItemInfo* infoPtr;
     GameDataHolderWriter writer(sInstance->mCurStageScene);
-    bool updateIndex = false;
+    bool updateIndex = archipelago->getCheckIndex() < packet->index;
     sead::FixedSafeString<40> indexMessage;
     indexMessage = "";
     indexMessage.append("Received item index ");
@@ -289,10 +290,11 @@ void Client::receiveCheck(Check* packet) {
     switch (itemType) {
     case CheckType::Coins:
         // setMessage(3, "Coins Received");
-        if (archipelago->getCheckIndex() < packet->index) {
+        if (updateIndex) {
             GameDataFunction::addCoin(writer, packet->amount);
-            updateIndex = true;
         }
+        gotItemMessage.itemType = CappyMessageTypes::CappyCoins;
+        gotItemMessage.itemIndex = packet->amount;
         break;
 
     case CheckType::Moon:
@@ -310,9 +312,8 @@ void Client::receiveCheck(Check* packet) {
         info.type = static_cast<ShopItem::ItemType>(itemType);
         infoPtr = &info;
         writer.mData->mPlayingFile->buyItem(infoPtr, false);
-        if (archipelago->getCheckIndex() < packet->index) {
+        if (updateIndex) {
             GameDataFunction::wearCostume(writer, info.name);
-            updateIndex = true;
         }
         archipelago->setCappyItemName(packet->objId);
         gotItemMessage.itemType = CappyMessageTypes::CappyClothes;
@@ -324,9 +325,8 @@ void Client::receiveCheck(Check* packet) {
         info.type = static_cast<ShopItem::ItemType>(itemType);
         infoPtr = &info;
         writer.mData->mPlayingFile->buyItem(infoPtr, false);
-        if (archipelago->getCheckIndex() < packet->index) {
+        if (updateIndex) {
             GameDataFunction::wearCap(writer, info.name);
-            updateIndex = true;
         }
         archipelago->setCappyItemName(packet->objId);
         gotItemMessage.itemType = CappyMessageTypes::CappyCap;
@@ -386,6 +386,13 @@ void Client::receiveCheck(Check* packet) {
         gotItemMessage.itemIndex = packet->locationId;
         break;
 
+    case CheckType::SentCheck:
+        archipelago->setCappyItemName(packet->objId);
+        gotItemMessage.itemType = packet->amount;
+        gotItemMessage.isOutgoing = true;
+        updateIndex = true;
+        break;
+
     default:
         recCheck = "Received Invalid Check Type ";
         recCheck.append(intToCstr(itemType));
@@ -394,10 +401,10 @@ void Client::receiveCheck(Check* packet) {
     }
 
     if (updateIndex) {
-        archipelago->setCheckIndex(packet->index);
+        if (itemType != CheckType::SentCheck)
+            archipelago->setCheckIndex(packet->index);
+        archipelago->enqueueCappyMessage(gotItemMessage);
     }
-
-    archipelago->enqueueCappyMessage(gotItemMessage);
 }
 
 void Client::receiveDeath(Deathlink* packet) {

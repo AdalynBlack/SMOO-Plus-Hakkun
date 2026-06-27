@@ -19,6 +19,7 @@
 #include "server/gamemode/GameModeBase.hpp"
 
 enum CheckType {
+    SentCheck = -11,
     ShopMoonScout = -10,
     MoonRockScout = -9,
     StickerScout = -8,
@@ -113,6 +114,11 @@ public:
     void addRegionalCoin(int index);
     bool hasRegionalCoin(const char* placementId);
     bool hasRegionalCoin(int index);
+
+    void setDefeatedBowserCloud(bool value) { mDefeatedBowserInCloud = value; };
+    bool getDefeatedBowserCloud() { return mDefeatedBowserInCloud; };
+    void setDefeatedKlepto(bool value) { mDefeatedKlepto = value; };
+    bool getDefeatedKlepto() { return mDefeatedKlepto; };
 
     void enqueueCappyMessage(cappyMessage message);
 
@@ -243,7 +249,6 @@ public:
     // non-null, tryPumpCappyMessage is a no-op and queued entries accumulate
     // (capped at kCappyQueueCap).
     // void enqueueCappyMessage(const char* utf8_text);
-    void tryPumpCappyMessage();
     const char16_t* lookupCappyMessageSubstitution(const char* label) const;
     // STATIC because main.cpp::hkMain installs these at module init, before
     // any ArchipelagoMode instance is created.
@@ -269,6 +274,7 @@ public:
     bool infoMenu();
     int getRelativeWorldCoinCollectCheckGotNum(GameDataHolderAccessor accessor);
     void calculateShineScenarios();
+    int isMoonRockScenario(int worldId);
     int getSubAreaScenario(const char* toStageName);
     bool tryShowCappyMessage(StageScene* curScene);
     void buildCappyMessage();
@@ -390,10 +396,10 @@ private:
     sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 47> mGameNames;
     // moon data 47 - 146
     // moon rock 147
-    // cappy message parts 148 - 157
+    // cappy message parts 148 - 167
     // coin shop item and slot names would be treated as common due to there always available nature
-    sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 158> mSlotNames;
-    sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 158> mItemNames;
+    sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 168> mSlotNames;
+    sead::SafeArray<sead::FixedSafeString<APNAMESIZE>, 168> mItemNames;
 
     // need duplicates of theese lists in player.py for tracking current cached names state might not be needed
 
@@ -438,54 +444,17 @@ private:
     // regionals coins found in a stage
     int mRelativeWorldCoinCollect = -1;
 
-    sead::SafeArray<cappyMessage, 10> mCappyMessages;
+    bool mDefeatedBowserInCloud = false;
+    bool mDefeatedKlepto = false;
+
+    static const int kCappyMessageQueueSize = 20;
+    sead::SafeArray<cappyMessage, kCappyMessageQueueSize> mCappyMessages;
     int mCurrentCappyMessage = 0;
     int mCurrentCappyQueue = 0;
     bool mIsCappyMessageActive = false;
-    bool mIsBuildingCappyMessage = false;
     int mCappyMessageFrameTimer = 0;
+    int mCappyCheckForMessageTimer = 0;
 
     sead::WFixedSafeString<APNAMESIZE * 3> mSafeCappyBuffer;
-
-    // ===== Cappy Messenger state =====
-    // Small circular UTF-8 queue + a single live UTF-16 buffer that
-    // CapMessageLayout reads through. tryPumpCappyMessage drives the state
-    // machine once per frame from update().
-    static constexpr u32 kCappyQueueCap = 8;
-    static constexpr u32 kCappyTextCap = 200;      // UTF-8 bytes including NUL
-    static constexpr u32 kCappyBufferWords = 200;  // char16_t words including NUL
-    // Settle gate: only pump once BOTH a frame count AND a wallclock-ms
-    // interval have elapsed since the last scene change. Both halves are
-    // load-bearing:
-    //   - Frame-only fails on Ryujinx: during save deserialization the JIT
-    //     can pause execution while wallclock keeps running, so by the time
-    //     update() resumes the frame counter is still 0 but the scene has
-    //     actually been resident for seconds — we miss the gate and pump
-    //     immediately into a half-initialized scene.
-    //   - ms-only fails on real Switch: rare paths where the scene reports
-    //     itself before any update() frames have actually run, so wallclock
-    //     elapsed is high but the scene isn't ready to draw a bubble.
-    // smo_archipelago hit both failure modes in M9; the dual gate is the
-    // shipped fix. See CappyMessenger.cpp settle-gate block for the history.
-    static constexpr u32 kCappySettleFrames = 30;
-    static constexpr s64 kCappySettleMs = 500;
-    static constexpr u32 kCappyMaxRetryFrames = 600;  // ~10 s @ 60fps
-    static constexpr s32 kCappyWaitTicks = 180;       // bubble on-screen lifetime
-    struct CappyEntry {
-        char text[kCappyTextCap];
-        bool live;
-    };
-    sead::SafeArray<CappyEntry, kCappyQueueCap> mCappyQueue;
-    u32 mCappyHead = 0;
-    u32 mCappyTail = 0;
-    u32 mCappyLiveCount = 0;
-    u32 mCappyRetryFrames = 0;
-    u32 mCappySettleFrames = 0;
-    s64 mCappySceneChangeMs = 0;
-    const al::IUseSceneObjHolder* mCappyLastScene = nullptr;
-    // Replace uses of mCappyBuffer with mSafeCappyBuffer.cstr()
-    // Make function that takes in wfixedsafestring ptr and const char*
-    // that converts the string to a wide string
-    char16_t mCappyBuffer[APNAMESIZE * 3] = {};
     bool mCappyBufferInUse = false;
 };

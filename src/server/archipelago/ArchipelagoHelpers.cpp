@@ -227,13 +227,22 @@ const char16_t* getRegionalCoinIcon(int worldId) {
     return icon.cstr();
 }
 
-void getColor(ProjectTextColors color, sead::WBufferedSafeString* str) {
+void getColor(ProjectTextColors color, sead::WBufferedSafeString* str, short tagIndex) {
     // sead::WFixedSafeString<APNAMESIZE> colorTag = sead::WFixedSafeString<8>();
-    str->append(0x0000);
-    str->append(0x000e);
-    str->append(0x0003);
-    str->append(0x0002);
-    str->append(color);
+    str->append(u"\x000e\xf777\x0003\x0002");
+
+    str->append(colors[color]);
 
     // return colorTag.cstr();
+}
+
+const char16_t* getMiscIcon(int type) {
+    sead::WFixedSafeString<APNAMESIZE> icon = sead::WFixedSafeString<8>();
+    icon.append(0x000e);
+    icon.append(0x0008);
+    icon.append(miscIcons1[type]);
+    icon.append(0x0004);
+    icon.append(0x0006);
+    icon.append(miscIcons2[type]);
+    return icon.cstr();
 }

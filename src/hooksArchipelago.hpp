@@ -501,6 +501,7 @@ void onNewGameDemoStart(char* name, bool unkBool) {
 static void onUnlockLost(GameDataHolderWriter writer, int worldIndex) {
     // Send Beat Bowser in Cloud location
     if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
+        GameModeManager::instance()->getMode<ArchipelagoMode>()->setDefeatedBowserCloud(true);
         Client::sendCheckPacket(2500, CheckType::Moon);
     }
 
@@ -809,46 +810,6 @@ static HkTrampoline<bool, GameDataFile*, int, int> tryUnlockShineNameHook = hk::
 // CapMessageShowInfo::isStageMessage; rs::tryShowCapMessagePriorityLow uses
 // the System path but defensive hooking of both costs little and protects
 // against future code that uses the Stage path.
-
-static HkTrampoline<bool, const al::IUseMessageSystem*, const char*, const char*> isExistLabelInSystemMessageHook =
-    hk::hook::trampoline([](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> bool {
-        // if (GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-        //     if (GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label) != nullptr) {
-        //         return true;
-        //     }
-        // }
-        return isExistLabelInSystemMessageHook.orig(sys, mstxt, label);
-    });
-
-static HkTrampoline<const char16_t*, const al::IUseMessageSystem*, const char*, const char*> getSystemMessageStringTrampolineHook =
-    hk::hook::trampoline([](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> const char16_t* {
-        // if (Client::instance() && GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-        //     const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label);
-        //     if (sub)
-        //         return sub;
-        // }
-        return getSystemMessageStringTrampolineHook.orig(sys, mstxt, label);
-    });
-
-static HkTrampoline<bool, const al::IUseMessageSystem*, const char*, const char*> isExistLabelInStageMessageHook =
-    hk::hook::trampoline([](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> bool {
-        // if (Client::instance() && GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-        //     if (GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label) != nullptr) {
-        //         return true;
-        //     }
-        // }
-        return isExistLabelInStageMessageHook.orig(sys, mstxt, label);
-    });
-
-static HkTrampoline<const char16_t*, const al::IUseMessageSystem*, const char*, const char*> getStageMessageStringHook =
-    hk::hook::trampoline([](const al::IUseMessageSystem* sys, const char* mstxt, const char* label) -> const char16_t* {
-        // if (Client::instance() && GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-        //     const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label);
-        //     if (sub)
-        //         return sub;
-        // }
-        return getStageMessageStringHook.orig(sys, mstxt, label);
-    });
 
 static bool isExistCappyLabelInSystemMessageHook(const al::IUseMessageSystem* sys, const char* mstxt, const char* label) {
     if (GameModeManager::instance() && GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {

@@ -316,6 +316,41 @@ void ArchipelagoMode::calculateShineScenarios() {
     }
 }
 
+int ArchipelagoMode::isMoonRockScenario(int worldId) {
+    GameDataHolderAccessor accessor(mCurScene);
+    int curScenario = getScenario(worldId);
+    int preMoonRockScenario = accessor.mData->mWorldList->getAfterEndingScenarioNo(worldId);
+    if (curScenario >= preMoonRockScenario)
+        return curScenario;
+    bool isMoonRock = true;
+    if (worldId < GameDataFunction::getWorldIndexPeach()) {
+        for (int i = 0; i < storyLengths[worldId]; i++) {
+            short shineId = storyShines[worldId][i];
+            if (shineId > 0 && !hasShine(shineId)) {
+                isMoonRock = false;
+                break;
+            }
+            if (shineId == -1) {
+                if (curScenario < 2 && !GameDataFunction::isUnlockedWorld(accessor, worldId)) {
+                    curScenario = 2;
+                    setScenario(worldId, curScenario);
+                } else {
+                    curScenario = 1;
+                    setScenario(worldId, curScenario);
+                }
+                isMoonRock = mDefeatedBowserInCloud;
+            }
+            if (shineId == -2) {
+            }
+        }
+    }
+    if (isMoonRock) {
+        setScenario(worldId, preMoonRockScenario);
+        return preMoonRockScenario;
+    }
+    return curScenario;
+}
+
 int ArchipelagoMode::getSubAreaScenario(const char* toStageName) {
     int toScenario = -1;
     if (al::isEqualString(toStageName, "ForestWorldBossStage"))
@@ -338,14 +373,13 @@ bool ArchipelagoMode::tryShowCappyMessage(StageScene* curScene) {
     // End read prevention at tryShow
     bool isActive = rs::isActiveCapMessage(curObjHolder);
     if (isActive) {
-        mCappyMessageFrameTimer = 180;
+        mCappyMessageFrameTimer = 100;
     }
 
-    if (mCappyMessageFrameTimer > 0 || mCappyBufferInUse || mCappyMessages[mCurrentCappyMessage].itemType == 255 ||
-        mCappyMessages[mCurrentCappyMessage].slotNameIndex < 148) {
+    if (mCappyMessageFrameTimer > 0 || mCappyBufferInUse || mCappyMessages[mCurrentCappyMessage].itemType == 255) {
         if (!isActive) {
             mCappyMessageFrameTimer -= 1;
-            if (mCappyMessageFrameTimer == 0)
+            if (mCappyMessageFrameTimer <= 0)
                 mCappyBufferInUse = false;
         }
         return false;
@@ -353,8 +387,7 @@ bool ArchipelagoMode::tryShowCappyMessage(StageScene* curScene) {
 
     buildCappyMessage();
 
-    // mIsBuildingCappyMessage = false;
-    if (rs::tryShowCapMessagePriorityLow(curObjHolder, kArchipelagoCappyLabel, kCappyWaitTicks, 0)) {
+    if (rs::tryShowCapMessagePriorityLow(curObjHolder, kArchipelagoCappyLabel, 180, 0)) {
         // Reset the read message
         sead::FixedSafeString<64> debugStr = sead::FixedSafeString<64>();
         debugStr = "Current Cappy Message: Slot: ";
@@ -365,8 +398,8 @@ bool ArchipelagoMode::tryShowCappyMessage(StageScene* curScene) {
         debugStr.append(intToCstr(mCappyMessages[mCurrentCappyMessage].itemIndex));
         Client::addMessage(debugStr.cstr());
         mCappyMessages[mCurrentCappyMessage] = {255, 255, 255, false};
-        mCurrentCappyMessage = (mCurrentCappyMessage + 1) % 10;
-        // mNextCappyMessage = (mNextCappyMessage + 1) % 10;
+        mCurrentCappyMessage = (mCurrentCappyMessage + 1) % kCappyMessageQueueSize;
+        // mNextCappyMessage = (mNextCappyMessage + 1) % kCappyMessageQueueSize;
         return true;
     }
 
@@ -380,136 +413,67 @@ void ArchipelagoMode::buildCappyMessage() {
     cappyMessage curMessage = mCappyMessages[mCurrentCappyMessage];
     // const char* tags[] = {"<name>", "<item>", "<type>", ""};
     GameDataHolderAccessor accessor(mCurScene);
-    al::IUseMessageSystem* messageSystem = (al::IUseMessageSystem*)accessor.mData;
+    short tagIndex = 0;
 
-    Client::addMessage(mSlotNames[curMessage.slotNameIndex].cstr());
-
-    if (!curMessage.isOutgoing) {
-        if (curMessage.itemType == 0) {
-            mSafeCappyBuffer = u"Connected to Archipelago as ";
-            // getColor(ProjectTextColors::Blue, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(mSlotNames[curMessage.slotNameIndex].cstr(), &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u".");
+    bool hasName = !mSlotNames[curMessage.slotNameIndex].isEmpty();
+    if (curMessage.itemType == 0) {
+        mSafeCappyBuffer = u"Connected to Archipelago as ";
+    } else {
+        if (curMessage.isOutgoing) {
+            mSafeCappyBuffer = u"Sent ";
+        } else {
+            if (hasName)
+                mSafeCappyBuffer = u"Got ";
+            else
+                mSafeCappyBuffer = u"Found ";
         }
 
-        else if (curMessage.itemType == 1) {
-            mSafeCappyBuffer = u"Got ";
-            // getColor(ProjectTextColors::Yellow, &mSafeCappyBuffer);
+        if (curMessage.itemType < CappyMessageTypes::CappyRegionalCoin) {
+            getColor(ProjectTextColors::Yellow, &mSafeCappyBuffer, tagIndex);
+            tagIndex++;
             appendUtf8ToUtf16(kingdoms[curMessage.itemIndex], &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" ");
-            appendUtf8ToUtf16(SMOItems[curMessage.itemType], &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" from ");
-            // getColor(ProjectTextColors::Blue, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(mSlotNames[curMessage.slotNameIndex].cstr(), &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u".");
         }
 
-        else if (curMessage.itemType == 2) {
-            mSafeCappyBuffer = u"Got ";
-            // getColor(ProjectTextColors::Yellow, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(kingdoms[curMessage.itemIndex], &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" ");
-            appendUtf8ToUtf16(SMOItems[curMessage.itemType], &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" from ");
-            // getColor(ProjectTextColors::Blue, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(mSlotNames[curMessage.slotNameIndex].cstr(), &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u".");
-        }
-
-        else if (curMessage.itemType == 3) {
-            mSafeCappyBuffer = u"Got ";
+        else if (curMessage.itemType == CappyMessageTypes::CappyRegionalCoin) {
             // appendUtf8ToUtf16(kingdoms[curMessage.itemIndex], &mSafeCappyBuffer);
             mSafeCappyBuffer.append(getRegionalCoinIcon(curMessage.itemIndex));
-            mSafeCappyBuffer.append(u" ");
-            // getColor(ProjectTextColors::Yellow, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(SMOItems[curMessage.itemType], &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" from ");
-            // getColor(ProjectTextColors::Blue, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(mSlotNames[curMessage.slotNameIndex].cstr(), &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u".");
+            tagIndex++;
         }
 
-        else if (curMessage.itemType == 4) {
-            mSafeCappyBuffer = u"Got ";
+        else if (curMessage.itemType <= CappyMessageTypes::CappyCapture) {
             appendUtf8ToUtf16(mItemNames[curMessage.itemIndex].cstr(), &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" ");
-            // getColor(ProjectTextColors::Yellow, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(SMOItems[curMessage.itemType], &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" from ");
-            // getColor(ProjectTextColors::Blue, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(mSlotNames[curMessage.slotNameIndex].cstr(), &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u".");
         }
 
-        else if (curMessage.itemType == 5) {
-            mSafeCappyBuffer = u"Got ";
-            appendUtf8ToUtf16(mItemNames[curMessage.itemIndex].cstr(), &mSafeCappyBuffer);
+        else if (curMessage.itemType == CappyMessageTypes::CappyCoins) {
+            appendUtf8ToUtf16(intToCstr(curMessage.itemIndex), &mSafeCappyBuffer);
             mSafeCappyBuffer.append(u" ");
-            // getColor(ProjectTextColors::Yellow, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(SMOItems[curMessage.itemType], &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" from ");
-            // getColor(ProjectTextColors::Blue, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(mSlotNames[curMessage.slotNameIndex].cstr(), &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u".");
+            mSafeCappyBuffer.append(getMiscIcon(1));
         }
 
-        else if (curMessage.itemType == 6) {
-            mSafeCappyBuffer = u"Got ";
-            appendUtf8ToUtf16(mItemNames[curMessage.itemIndex].cstr(), &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" ");
-            // getColor(ProjectTextColors::Yellow, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(SMOItems[curMessage.itemType], &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" from ");
-            // getColor(ProjectTextColors::Blue, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(mSlotNames[curMessage.slotNameIndex].cstr(), &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u".");
-        }
-
-        else if (curMessage.itemType == 7) {
-            mSafeCappyBuffer = u"Got ";
-            appendUtf8ToUtf16(mItemNames[curMessage.itemIndex].cstr(), &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" ");
-            // getColor(ProjectTextColors::Yellow, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(SMOItems[curMessage.itemType], &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" from ");
-            // getColor(ProjectTextColors::Blue, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(mSlotNames[curMessage.slotNameIndex].cstr(), &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u".");
-        }
-
-        else if (curMessage.itemType == 8) {
-            mSafeCappyBuffer = u"Got ";
-            appendUtf8ToUtf16(mItemNames[curMessage.itemIndex].cstr(), &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" ");
-            // getColor(ProjectTextColors::Yellow, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(SMOItems[curMessage.itemType], &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u" from ");
-            // getColor(ProjectTextColors::Blue, &mSafeCappyBuffer);
-            appendUtf8ToUtf16(mSlotNames[curMessage.slotNameIndex].cstr(), &mSafeCappyBuffer);
-            // getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer);
-            mSafeCappyBuffer.append(u".");
+        mSafeCappyBuffer.append(u" ");
+        getColor(ProjectTextColors::Yellow, &mSafeCappyBuffer, tagIndex);
+        tagIndex++;
+        appendUtf8ToUtf16(SMOItems[curMessage.itemType], &mSafeCappyBuffer);
+        getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer, tagIndex);
+        tagIndex++;
+        if (hasName) {
+            if (curMessage.isOutgoing)
+                mSafeCappyBuffer.append(u" to ");
+            else
+                mSafeCappyBuffer.append(u" from ");
         }
     }
 
-    // for (int i = 0; i < mSafeCappyBuffer.calcLength(); i++) {
-    //     mCappyBuffer[i] = mSafeCappyBuffer[i];
-    // }
-    // mCappyBufferInUse = false;
+    if (hasName) {
+        getColor(ProjectTextColors::Blue, &mSafeCappyBuffer, tagIndex);
+        tagIndex++;
+        appendUtf8ToUtf16(mSlotNames[curMessage.slotNameIndex].cstr(), &mSafeCappyBuffer);
+        getColor(ProjectTextColors::ResetColor, &mSafeCappyBuffer, tagIndex);
+        tagIndex++;
+    }
+
+    mSafeCappyBuffer.append(u".");
+    mSafeCappyBuffer.replaceChar(u'\xf777', u'\x0000');
+
     return;
 }

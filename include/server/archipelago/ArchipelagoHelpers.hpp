@@ -1470,16 +1470,18 @@ __attribute__((used)) static const char16_t miscIcons2[] = {0x0037, 0x0040};
 __attribute__((used)) static const char16_t color1[] = {0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007, 0xffff};
 __attribute__((used)) static const char16_t color2[] = {0x0006, 0x0005, 0x0004, 0x0005, 0x0005, 0x0004, 0x0005, 0x0000, 0x0000};
 
+__attribute__((used)) static const char16_t colors[] = {0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007, 0xffff};
+
 enum ProjectTextColors {
-    Black = 0x0000,
-    Yellow = 0x0001,
-    White = 0x0002,
-    Red = 0x0003,
-    Green = 0x0004,
-    Blue = 0x0005,
-    Gray = 0x0006,
-    Rough = 0x0007,
-    ResetColor = 0xffff,
+    Black = 0,
+    Yellow = 1,
+    White = 2,
+    Red = 3,
+    Green = 4,
+    Blue = 5,
+    Gray = 6,
+    Rough = 7,
+    ResetColor = 8,
 };
 
 __attribute__((used)) static const char* itemSystemMessageFiles[] = {
@@ -1520,7 +1522,9 @@ enum CappyMessageTypes {
     CappyCapture = 8,
     CappyMoonRock = 9,
     CappyHealthUpgrade = 10,
-    CappyWalletUpgrade = 11
+    CappyWalletUpgrade = 11,
+    CappyCoins = 12,
+    CappySent = 13,
 };
 
 struct cappyMessage {
@@ -1539,6 +1543,28 @@ struct scenarioShine {
 __attribute__((used)) static const scenarioShine shineScenarios[] = {{1, 218, 2},  {2, 495, 2},  {2, 560, 3},  {3, 130, 2}, {3, 181, 3},
                                                                      {4, 424, 2},  {7, 130, 2},  {7, 181, 3},  {8, 437, 2}, {9, 1020, 2},
                                                                      {10, 292, 2}, {10, 290, 3}, {11, 795, 2}, {12, 332, 2}};
+
+__attribute__((used)) static const short capStory[] = {};
+__attribute__((used)) static const short cascadeStory[] = {205, 218};
+__attribute__((used)) static const short sandStory[] = {497, 496, 495, 560};
+__attribute__((used)) static const short woodedStory[] = {129, 130, 159, 181};
+__attribute__((used)) static const short lakeStory[] = {424};
+__attribute__((used)) static const short cloudStory[] = {-1};  // Post Bowser
+__attribute__((used)) static const short lostStory[] = {-2};   // Post Klepto
+__attribute__((used)) static const short metroStory[] = {37, 41, 42, 43, 44, 95};
+__attribute__((used)) static const short seasideStory[] = {438, 439, 440, 441, 437};
+__attribute__((used)) static const short snowStory[] = {17, 18, 22, 25, 1020};
+__attribute__((used)) static const short luncheonStory[] = {291, 251, 292, 290};
+__attribute__((used)) static const short ruinedStory[] = {795};
+__attribute__((used)) static const short bowserStory[] = {325, 334, 314, 332};
+__attribute__((used)) static const short moonStory[] = {-3};  // Reach with Odyssey?
+
+__attribute__((used)) static const u8 storyLengths[] = {0, 2, 4, 4, 1, 1, 1, 6, 5, 5, 4, 1, 4, 1};
+
+__attribute__((used)) static const short* storyShines[] = {
+    capStory,   cascadeStory, sandStory, woodedStory,   lakeStory,   cloudStory,  lostStory,
+    metroStory, seasideStory, snowStory, luncheonStory, ruinedStory, bowserStory, moonStory,
+};
 
 bool isInApCostumeList(const char* costumeName);
 int getIndexApCostumeList(const char* costumeName);
@@ -1560,4 +1586,5 @@ const char* intToCstr(int number);
 const char16_t* utf8ToUtf16(const char* src);
 void appendUtf8ToUtf16(const char* src, sead::WFixedSafeString<64 * 3>* dest);
 const char16_t* getRegionalCoinIcon(int worldId);
-void getColor(ProjectTextColors color, sead::WBufferedSafeString* str);
+void getColor(ProjectTextColors color, sead::WBufferedSafeString* str, short tagIndex);
+const char16_t* getMiscIcon(int type);
