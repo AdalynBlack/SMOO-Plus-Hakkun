@@ -5,6 +5,17 @@
 #include "Keyboard.hpp"
 #include "server/gamemode/GameModeConfigMenu.hpp"
 
+enum ArchipelagoConfigParts {
+    OptionClientIP = 1,
+    OptionReconnect = 2,
+    OptionHostName = 3,
+    OptionHostPort = 4,
+    OptionSlotName = 5,
+    OptionPassowrd = 6,
+    OptionDeathlink = 7,
+    OptionDefaultMode = 8,
+};
+
 // Forward declaration
 struct ArchipelagoInfo;
 
@@ -16,12 +27,12 @@ public:
     const sead::WFixedSafeString<0x200>* getStringData() override;
     GameModeConfigMenu::UpdateAction updateMenu(int selectIndex) override;
 
-    const int getMenuSize() override { return 7; }  // Fixed size for now
+    const int getMenuSize() override { return 8; }  // Fixed size for now
 
     void initMenu() override;
 
 private:
-    static constexpr int mItemCount = 7;
+    static constexpr int mItemCount = 8;
     sead::SafeArray<sead::WFixedSafeString<0x200>, mItemCount> mItems;
     Keyboard* mIPKeyboard = nullptr;
     Keyboard* mHostNameKeyboard = nullptr;

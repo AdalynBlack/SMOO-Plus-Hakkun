@@ -1162,6 +1162,12 @@ extern "C" void hkMain() {
     hk::hook::writeBranchLinkAtMainOffset(0x1dcb4c, isExistCappyLabelInStageMessageHook);
     hk::hook::writeBranchLinkAtMainOffset(0x1dcb84, getStageMessageCappyStringHook);
 
+    // Force oder of world unlock selections
+    // calcNextLockedLayoutHook.installAtSym<
+    //     "_ZN16GameDataFunction32calcNextLockedWorldIdForWorldMapEPKN2al11LayoutActorEi">();
+    // calcNextLockedSceneHook.installAtSym<
+    //     "_ZN16GameDataFunction32calcNextLockedWorldIdForWorldMapEPKN2al5SceneEi">();
+
     // rs:: function-pointer wiring. tryPumpCappyMessage's dispatch path
     // skips when either pointer is null, so a lookup failure here leaves
     // the queue accumulating but never firing — visible as enqueueCappyMessage

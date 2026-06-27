@@ -131,6 +131,7 @@ public:
     void setWorldUnlockCount(int worldId, int count);
     int getWorldUnlockCount(int worldId);
     void setDeathLinkFlag(bool value) { mDeathLinkEnabled = value; };
+    bool isDeathLinkEnabled() { return mDeathLinkEnabled; };
     bool getRegionalsFlag() { return mDeathLinkEnabled; };
     void setCapturesFlag(bool value) { mCapturesEnabled = value; };
     bool getCapturesFlag() { return mCapturesEnabled; };

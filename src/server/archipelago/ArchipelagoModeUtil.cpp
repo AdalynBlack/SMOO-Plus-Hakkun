@@ -171,7 +171,8 @@ void ArchipelagoMode::handleDeathLink(PlayerActorBase* playerBase, PlayerActorHa
     }
 
     if (PlayerFunction::isPlayerDeadStatus(playerBase) && !mDying) {
-        Client::sendDeathlinkPacket();
+        if (mDeathLinkEnabled)
+            Client::sendDeathlinkPacket();
         mDying = true;
     }
 
@@ -472,6 +473,16 @@ void ArchipelagoMode::buildCappyMessage() {
         tagIndex++;
     }
 
+    int replacedSpaceIndex = 0;
+    for (int i = 0; i < mSafeCappyBuffer.calcLength(); i++) {
+        if (mSafeCappyBuffer[i] == u' ') {
+            replacedSpaceIndex = i;
+        }
+        if (i > 32) {
+            mSafeCappyBuffer.getBuffer()[replacedSpaceIndex] = u'\n';
+            break;
+        }
+    }
     mSafeCappyBuffer.append(u".");
     mSafeCappyBuffer.replaceChar(u'\xf777', u'\x0000');
 
