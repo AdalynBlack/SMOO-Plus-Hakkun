@@ -1456,6 +1456,11 @@ __attribute__((used)) static const char* SMOItems[] = {"Connect",  "Power Moon",
                                                        "Souvenir", "Capture",    "Moon Rock",  "Missing1",      "Missing2", "Coins"};
 __attribute__((used)) static const char* kingdoms[] = {"Cap",  "Cascade",  "Sand",   "Wooded", "Lake", "Lost",     "Cloud",     "Metro",      "Seaside",
                                                        "Snow", "Luncheon", "Ruined", "Bowser", "Moon", "Mushroom", "Dark Side", "Darker Side"};
+
+__attribute__((used)) static const char* abilities[] = {
+    "Jump",      "Double Jump", "Triple Jump", "Side Flip",  "Back Flip", "Long Jump", "Wall Jump",  "Spin",  "Spin Jump", "Ground Pound", "Ground Pound Jump",
+    "Cap Throw", "Up Throw",    "Down Throw",  "Spin Throw", "Crouch",    "Roll",      "Roll Boost", "Vault", "Dive",      "Climb",        "Ledge Grab",
+};
 __attribute__((used)) static const char16_t regionalIcons1[] = {0x0010, 0x0011, 0x0012, 0x0013, 0x0014, 0x0000, 0x0015, 0x0016, 0x0017,
                                                                 0x0018, 0x0019, 0x0000, 0x001a, 0x001b, 0x001c, 0x001b, 0x001b};
 __attribute__((used)) static const char16_t regionalIcons2[] = {

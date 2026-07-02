@@ -57,6 +57,7 @@ void ArchipelagoConfigMenu::initMenu() {
     StageSceneStateModConfig::setMenuItemBase(mList->mListPartsArr[OptionSlotName]);
     StageSceneStateModConfig::setMenuItemBase(mList->mListPartsArr[OptionPassowrd]);
     StageSceneStateModConfig::setMenuItemCheck(mList->mListPartsArr[OptionDeathlink]);
+    StageSceneStateModConfig::setMenuItemCheck(mList->mListPartsArr[OptionMotionButton]);
     StageSceneStateModConfig::setMenuItemCheck(mList->mListPartsArr[OptionDefaultMode]);
 }
 
@@ -71,13 +72,16 @@ const sead::WFixedSafeString<0x200>* ArchipelagoConfigMenu::getStringData() {
     mItems[OptionSlotName - 1].copy(u"Archipelago Slot Name");
     mItems[OptionPassowrd - 1].copy(u"Archipelago Password");
     mItems[OptionDeathlink - 1].copy(u"Death Link");
+    mItems[OptionMotionButton - 1].copy(u"Bind Motion Input to R");
     mItems[OptionDefaultMode - 1].copy(u"Default Mode");
 
     if (info)
         al::startAction(mList->mListPartsArr[OptionDefaultMode], info->mIsClientConnected == ArchipelagoState::CLIENT_CONNECTED ? "On" : "Off", "State");
 
-    if (archipelago)
+    if (archipelago) {
         al::startAction(mList->mListPartsArr[OptionDeathlink], archipelago->isDeathLinkEnabled() ? "On" : "Off", "State");
+        al::startAction(mList->mListPartsArr[OptionMotionButton], archipelago->isMotionRebound() ? "On" : "Off", "State");
+    }
 
     return mItems.mBuffer;
 }
@@ -229,6 +233,14 @@ GameModeConfigMenu::UpdateAction ArchipelagoConfigMenu::updateMenu(int selectInd
 
         return GameModeConfigMenu::UpdateAction::REFRESH;
     }
+
+    case OptionMotionButton: {
+        archipelago->setMotionRebind(!archipelago->isMotionRebound());
+        al::startAction(mList->mListPartsArr[OptionMotionButton], archipelago->isMotionRebound() ? "On" : "Off", "State");
+
+        return GameModeConfigMenu::UpdateAction::REFRESH;
+    }
+
     case OptionDefaultMode: {
         Client::setDefaultGameMode(Client::getDefaultGameMode() == GameMode::ARCHIPELAGO ? GameMode::HIDEANDSEEK : GameMode::ARCHIPELAGO);
         al::startAction(mList->mListPartsArr[OptionDefaultMode], Client::getDefaultGameMode() == GameMode::ARCHIPELAGO ? "On" : "Off", "State");

@@ -41,6 +41,32 @@ enum CheckType {
     WalletUpgrade = 8
 };
 
+enum AbilityId {
+    AbilityId_Jump,
+    AbilityId_DoubleJump,
+    AbilityId_TripleJump,
+    AbilityId_SideFlip,
+    AbilityId_BackFlip,
+    AbilityId_LongJump,
+    AbilityId_WallJump,
+    AbilityId_Spin,
+    AbilityId_SpinJump,
+    AbilityId_GroundPound,
+    AbilityId_GroundPoundJump,
+    AbilityId_NeutralThrow,
+    AbilityId_UpThrow,
+    AbilityId_DownThrow,
+    AbilityId_SpinThrow,
+    AbilityId_Crouch,
+    AbilityId_Roll,
+    AbilityId_RollBoost,
+    AbilityId_Vault,
+    AbilityId_Dive,
+    AbilityId_Climb,
+    AbilityId_LedgeGrab,
+    AbilityId_End,
+};
+
 class ArchipelagoMode : public GameModeBase {
 public:
     ArchipelagoMode(const char* name);
@@ -115,6 +141,9 @@ public:
     bool hasRegionalCoin(const char* placementId);
     bool hasRegionalCoin(int index);
 
+    void unlockAbility(int index);
+    bool isAbilityUnlocked(int index);
+
     void setDefeatedBowserCloud(bool value) { mDefeatedBowserInCloud = value; };
     bool getDefeatedBowserCloud() { return mDefeatedBowserInCloud; };
     void setDefeatedKlepto(bool value) { mDefeatedKlepto = value; };
@@ -132,11 +161,14 @@ public:
     int getWorldUnlockCount(int worldId);
     void setDeathLinkFlag(bool value) { mDeathLinkEnabled = value; };
     bool isDeathLinkEnabled() { return mDeathLinkEnabled; };
-    bool getRegionalsFlag() { return mDeathLinkEnabled; };
     void setCapturesFlag(bool value) { mCapturesEnabled = value; };
     bool getCapturesFlag() { return mCapturesEnabled; };
     void setERFlag(bool value) { mIsEntranceRandomizationEnabled = value; };
     bool getERFlag() { return mIsEntranceRandomizationEnabled; };
+    void setAbilityLock(bool value) { mIsAbilityLockEnabled = value; };
+    bool isAbilityLockEnabled() { return mIsAbilityLockEnabled; };
+    void setMotionRebind(bool value) { mIsMotionInputRebound = value; };
+    bool isMotionRebound() { return mIsMotionInputRebound; };
 
     // ===== Talkatoo% mode =====
     // When enabled, Talkatoo's speech bubble names AP-pool moons drawn from
@@ -272,6 +304,7 @@ public:
     void getNearestRegional(StageScene* stageScene, PlayerActorBase* playerBase);
     void handleSoftLocks(GameDataHolderAccessor accessor, GameDataHolderWriter writer);
     void updateCounter(PlayerActorBase* playerBase, GameDataHolderAccessor accessor);
+    void drawAbilityLockWindow();
     bool infoMenu();
     int getRelativeWorldCoinCollectCheckGotNum(GameDataHolderAccessor accessor);
     void calculateShineScenarios();
@@ -312,6 +345,8 @@ private:
     bool mCapturesEnabled = false;
     bool mIsRecordCapture = false;
     bool mIsEntranceRandomizationEnabled = false;
+    bool mIsAbilityLockEnabled = false;
+    bool mIsMotionInputRebound = false;
     bool mIsConnectInit = false;
     bool mIsFirstConnect = true;
 
@@ -368,6 +403,8 @@ private:
 
     // List of 3 u8s for tracking which moon rocks have been scouted
     sead::SafeArray<u8, 3> mScoutedMoonRocks;
+
+    sead::SafeArray<u8, 3> mUnlockedAbilities;
 
     // Moon Text Replacement Handling
     int mRecentShineHintIndex = 0;

@@ -1,275 +1,22 @@
-#pragma once
+#include "server/archipelago/ArchipelagoHooks.hpp"
 
+#include "hk/hook/a64/Assembler.h"
+#include "hk/hook/InstrUtil.h"
 #include "hk/hook/Replace.h"
 #include "hk/hook/Trampoline.h"
+#include "hk/ro/RoUtil.h"
+#include "hk/util/Math.h"
 
 #include "sead/prim/seadSafeString.h"
 
-#include "al/Library/Base/StringUtil.h"
-#include "al/Library/Layout/LayoutActionFunction.h"
-#include "al/Library/LiveActor/ActorAreaFunction.h"
-#include "al/Library/Message/MessageHolder.h"
-#include "al/Library/Nerve/NerveUtil.h"
-#include "al/Library/Scene/Scene.h"
-#include "al/Library/Scene/SceneObjUtil.h"
+#include "al/Library/LiveActor/ActorActionFunction.h"
 
 #include "game/Actors/GrowFlowerPot.h"
 #include "game/Demo/DemoStateHackFirst.h"
-#include "game/Layout/TalkMessage.h"
-#include "game/Scene/CapMessageMoonNotifier.h"
-#include "game/Sequence/ChangeStageInfo.h"
-#include "game/System/GameDataFile.h"
-#include "game/System/GameDataFunction.h"
-#include "game/System/GameDataHolder.h"
-#include "game/System/GameDataUtil.h"
-#include "game/System/GameProgressData.h"
-#include "game/Util/ClothUtil.h"
-#include "game/Util/ItemUtil.h"
 #include "game/Util/StageLayoutFunction.h"
 
+#include "helpers.hpp"
 #include "rs/util.hpp"
-#include "server/archipelago/ArchipelagoMode.hpp"
-#include "server/Client.hpp"
-#include "server/gamemode/GameModeManager.hpp"
-
-// ===== isGotShine Hooks =====
-static bool isGrabShine(GameDataHolderAccessor accessor, int hintIdx) {
-    ArchipelagoMode* apMode = GameModeManager::instance()->getMode<ArchipelagoMode>();
-    GameDataFile::HintInfo* curHintInfo = &accessor.mData->getGameDataFile()->getHintList()[hintIdx];
-    if (!curHintInfo->isGrand) {
-        return apMode->hasShine(curHintInfo->uniqueId);
-    }
-    return false;
-}
-
-static HkTrampoline<bool, GameDataHolderAccessor, const ShineInfo*> isGrabShineByShineInfoHook =
-    hk::hook::trampoline([](GameDataHolderAccessor accessor, const ShineInfo* shineInfo) -> bool {
-        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-            int i = 0;
-            for (i = 0; i < 0x400; i++) {
-                GameDataFile::HintInfo* curHintInfo = &accessor.mData->getGameDataFile()->getHintList()[i];
-                if (al::isEqualString(curHintInfo->objId, shineInfo->mObjId) && al::isEqualString(curHintInfo->stageName, shineInfo->mStageName)) {
-                    break;
-                }
-            }
-            if (i < 0x400) {
-                return isGrabShine(accessor, i);
-            } else {
-                return false;
-            }
-
-        } else {
-            return isGrabShineByShineInfoHook.orig(accessor, shineInfo);
-        }
-    });
-
-static HkTrampoline<bool, GameDataHolderAccessor, int> isGrabShineByHintInfoIdxHook =
-    hk::hook::trampoline([](GameDataHolderAccessor accessor, int hintIdx) -> bool {
-        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-            return isGrabShine(accessor, hintIdx);
-        } else {
-            return isGrabShineByHintInfoIdxHook.orig(accessor, hintIdx);
-        }
-    });
-
-// static HkTrampoline<bool, GameDataHolderAccessor, int, int> isGrabShineByWorldIdHintIdxHook =
-//     hk::hook::trampoline([](GameDataHolderAccessor accessor, int worldId, int hintIdx) -> bool {
-//         // Examine if not performing check for moon rock scenario causes unintended behavior in game
-//         if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-//             return isGrabShine(accessor, hintIdx);
-//         } else {
-//             return isGrabShineByWorldIdHintIdxHook.orig(accessor, worldId, hintIdx);
-//         }
-//     });
-
-// might be unneeded
-static HkTrampoline<bool, const Shine*> isGotShineRedirectHook = hk::hook::trampoline([](const Shine* curShine) -> bool {
-    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        GameDataHolderAccessor accessor = GameDataHolderAccessor(curShine);
-        return isGrabShine(accessor, curShine->mShineIdx);
-    } else {
-        return isGotShineRedirectHook.orig(curShine);
-    }
-});
-
-static bool shineListShineCountHook(GameDataHolderAccessor accessor, int worldId, int hintIdx) {
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-        // Gets Shine Uid by index in hint list relative to worldId
-        int hintIdxByWorld = -1;
-        for (int i = 0; i < 0x400; i++) {
-            GameDataFile::HintInfo* curHintInfo = &accessor.mData->getGameDataFile()->getHintList()[i];
-            if (curHintInfo->worldId == worldId) {
-                hintIdxByWorld += 1;
-                if (hintIdxByWorld == hintIdx) {
-                    return GameModeManager::instance()->getMode<ArchipelagoMode>()->hasShine(curHintInfo->uniqueId);
-                }
-            }
-        }
-
-        // sead::FixedSafeString<64> errorStr = sead::FixedSafeString<64>();
-        // errorStr = "world ";
-        // errorStr.append(intToCstr(worldId));
-        // errorStr.append(", hint ");
-        // errorStr.append(intToCstr(hintIdx));
-        // errorStr.append(", unique ");
-        // errorStr.append(intToCstr(curHintInfo->uniqueId));
-        // Client::addMessage(errorStr.cstr());
-        Client::addMessage("Failed to find shine for list.");
-    }
-
-    return GameDataFunction::isGotShine(accessor, worldId, hintIdx);
-}
-
-// ===== Unlock Shine Num =====
-int getApUnlockShineNumByWorldId(int worldId) {
-    if (worldId < 1 || worldId > 16) {
-        worldId = 0;
-    }
-
-    return GameModeManager::instance()->getMode<ArchipelagoMode>()->getWorldUnlockCount(worldId);
-}
-
-static HkTrampoline<int, GameDataHolder*, bool*, int> getUnlockShineNumHook =
-    hk::hook::trampoline([](GameDataHolder* thisPtr, bool* unkBool, int worldId) -> int {
-        if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-            return getApUnlockShineNumByWorldId(worldId);
-        }
-        return getUnlockShineNumHook.orig(thisPtr, unkBool, worldId);
-    });
-
-// static HkTrampoline<int, bool*, GameDataHolderAccessor> getUnlockShineNumByAccessorHook = hk::hook::trampoline([](bool* unkBool, GameDataHolderAccessor
-// accessor) -> int {
-//     if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-//         int worldId = accessor.mData->mPlayingFile->getCurrentWorldId();
-//         return getApUnlockShineNumByWorldId(worldId);
-//     }
-//     return getUnlockShineNumByAccessorHook.orig(unkBool, accessor);
-// });
-
-// static HkTrampoline<int, GameDataFile*, bool*> getUnlockShineNumByGameDataFileHook = hk::hook::trampoline([](GameDataFile* file, bool* unkBool) -> int {
-//     if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-//         int worldId = file->getCurrentWorldId();
-//         return getApUnlockShineNumByWorldId(worldId);
-//     }
-//     return getUnlockShineNumByGameDataFileHook.orig(file, unkBool);
-// });
-//
-// static HkTrampoline<int, bool*, GameDataHolder*, int> getUnlockShineNumByWorldIdHook = hk::hook::trampoline([](bool* unkBool, GameDataHolder* thisPtr, int
-// worldId) -> int {
-//     if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-//         return getApUnlockShineNumByWorldId(worldId);
-//     }
-//     return getUnlockShineNumByWorldIdHook.orig(unkBool, thisPtr, worldId);
-// });
-
-static bool showHasUnlockShineNumCapMessage(al::IUseSceneObjHolder* sceneObjHolder) {
-    GameDataHolderAccessor accessor = GameDataHolderAccessor(sceneObjHolder);
-    if (GameDataFunction::getGotShineNum(accessor, -1) >=
-        GameModeManager::instance()->getMode<ArchipelagoMode>()->getWorldUnlockCount(GameDataFunction::getCurrentWorldId(accessor))) {
-        if (al::isExistSceneObj(sceneObjHolder, 5)) {
-            CapMessageMoonNotifier* notifier = (CapMessageMoonNotifier*)al::getSceneObj(sceneObjHolder, 5);
-            /*notifier->unlockShineNum =
-                Client::getWorldUnlockCount(GameDataFunction::getCurrentWorldId(accessor));*/
-            // Client::setMessage(1, "Has Enough Moons for notification.");
-            return notifier->tryShowCapMessageMoonNotify();
-        }
-        return false;
-    }
-    return false;
-}
-
-// ===== Regional Coins =====
-static bool isGotCoinCollectHook(GameDataFile* file, al::PlacementId const* placementId) {
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-        ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
-        al::StringTmp<128> placeIdString;
-        placementId->makeString(&placeIdString);
-        return archipelago->hasRegionalCoin(placeIdString.cstr());
-    } else {
-        return file->isGotCoinCollect(placementId);
-    }
-}
-
-// Gets the relative world Id for CoinCollect archive name and Picture Font for ER
-static int getCurrentWorldIdForCoinCollectHook(GameDataHolderAccessor accessor) {
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO) &&
-        GameModeManager::instance()->getMode<ArchipelagoMode>()->getRelativeWorldCoinCollect() > -1) {
-        ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
-        return archipelago->getRelativeWorldCoinCollect();
-    }
-    return GameDataFunction::getCurrentWorldId(accessor);
-}
-
-static int getCoinCollectCheckGotNumHook(GameDataHolderAccessor accessor) {
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO) &&
-        GameModeManager::instance()->getMode<ArchipelagoMode>()->getRelativeWorldCoinCollect() > -1) {
-        ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
-        return archipelago->getRelativeWorldCoinCollectCheckGotNum(accessor);
-    }
-    return GameDataFunction::getCoinCollectGotNum(accessor);
-}
-
-static int getCoinCollectNumMaxHook(GameDataHolderAccessor accessor) {
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO) &&
-        GameModeManager::instance()->getMode<ArchipelagoMode>()->getRelativeWorldCoinCollect() > -1) {
-        ArchipelagoMode* archipelago = GameModeManager::instance()->getMode<ArchipelagoMode>();
-        return accessor.mData->getCoinCollectNumMax(archipelago->getRelativeWorldCoinCollect());
-    }
-    return GameDataFunction::getCoinCollectNumMax(accessor);
-}
-
-static HkTrampoline<int, GameDataHolderAccessor> getCoinCollectNumHook = hk::hook::trampoline([](GameDataHolderAccessor accessor) -> int {
-    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO) &&
-        GameModeManager::instance()->getMode<ArchipelagoMode>()->getRelativeWorldCoinCollect() > -1) {
-        return GameModeManager::instance()->getMode<ArchipelagoMode>()->getNumCoinCollect();
-    }
-
-    return getCoinCollectNumHook.orig(accessor);
-});
-
-static void useCoinCollectHook(GameDataHolderWriter writer, int amount) {
-    if (!GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-        GameDataFunction::useCoinCollect(writer, amount);
-    } else {
-        return;
-    }
-}
-
-// ===== Shop Items =====
-static void buyItemHook(GameDataFile* file, const ShopItem::ItemInfo* itemInfo, bool isPrepoSave) {
-    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        GameModeManager::instance()->getMode<ArchipelagoMode>()->sendShopCheck(itemInfo);
-        GameModeManager::instance()->getMode<ArchipelagoMode>()->addItem(itemInfo);
-    } else {
-        // Send buy item packet here
-        file->buyItem(itemInfo, isPrepoSave);
-    }
-}
-
-static bool isBuyItemHook(GameDataHolderAccessor accessor, ShopItem::ItemInfo* itemInfo) {
-    // Add a collected outfits, gifts, stickers based implementation similar to shinechecks
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-        return GameModeManager::instance()->getMode<ArchipelagoMode>()->hasItem(itemInfo);
-    } else {
-        return rs::isBuyItem(accessor, itemInfo);
-    }
-}
-
-static void wearCapHook(GameDataHolderWriter writer, const char* itemName) {
-    if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        GameDataFunction::wearCap(writer, itemName);
-    } else {
-        return;
-    }
-}
-
-static void wearCostumeHook(GameDataHolderWriter writer, const char* itemName) {
-    if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        GameDataFunction::wearCostume(writer, itemName);
-    } else {
-        return;
-    }
-}
 
 // ===== Stage Changing =====
 static void onGrandShineStageChange(GameDataHolderWriter writer, ChangeStageInfo const* stageInfo) {
@@ -364,116 +111,6 @@ static void changeNextStage(GameDataFile* file, const ChangeStageInfo* stageInfo
 //         }
 //     });
 
-// ===== Shine Data Replacement =====
-static bool isReplaceShineLabel(al::LayoutActor* layout, char const* element, char const* label, char const* param4) {
-    if (!GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        return rs::trySetPaneStageMessageIfExist(layout, element, label, param4);
-    }
-
-    return false;
-}
-
-static void setShineLabel(al::IUseLayout* layout, const char* elementLabel) {
-    al::setPaneStringFormat(layout, elementLabel, GameModeManager::instance()->getMode<ArchipelagoMode>()->getShineReplacementText());
-}
-
-static int isPowerStarHook(Shine* shine, char* stageName) {
-    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        int storedColor = GameModeManager::instance()->getMode<ArchipelagoMode>()->getShineColor(shine);
-        if (storedColor - 64 > -1)
-            return 99;
-    }
-    return rs::getStageShineAnimFrame((al::LiveActor*)shine, stageName);
-}
-
-static bool isWorldPeachHook(GameDataHolderAccessor accessor) {
-    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO))
-        return false;
-
-    return GameDataFunction::isWorldPeach(accessor);
-}
-
-static void setShineColor(Shine* thisPtr, char* stageName, int color, bool isSetMtpColor) {
-    // Get color here using shine unique id
-    // Client::setMessage(1, "Set custom shine color");
-    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        int storedColor = GameModeManager::instance()->getMode<ArchipelagoMode>()->getShineColor(thisPtr);
-        rs::setStageShineAnimFrame((al::LiveActor*)thisPtr, stageName, storedColor, isSetMtpColor);
-    } else {
-        rs::setStageShineAnimFrame((al::LiveActor*)thisPtr, stageName, color, isSetMtpColor);
-    }
-}
-
-static void setShineModelColor(Shine* thisPtr, char* stageName, int color, bool isSetMtpColor) {
-    // Get color here using shine unique id
-    // Client::setMessage(1, "Set custom other shine color");
-    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        int storedColor = GameModeManager::instance()->getMode<ArchipelagoMode>()->getShineColor(thisPtr);
-        rs::setStageShineAnimFrame(thisPtr->mModelShine, stageName, storedColor, isSetMtpColor);
-    } else {
-        rs::setStageShineAnimFrame(thisPtr->mModelShine, stageName, color, isSetMtpColor);
-    }
-}
-
-// ===== Shop Data Replacement =====
-static const char16_t* getShopItemMessage(al::IUseMessageSystem const* messageSystem, char const* fileName, char const* key) {
-    GameModeManager* manager = GameModeManager::instance();
-    if (manager->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        const char16_t* msg = manager->getMode<ArchipelagoMode>()->getShopReplacementText(fileName, key);
-        sead::WFixedSafeString<200> confirm;
-        confirm = u"";
-        confirm.append(msg);
-        if (!confirm.isEmpty()) {
-            return msg;
-        }
-    }
-    // Default to base game text if no ap text exists
-    return al::getSystemMessageString(messageSystem, fileName, key);
-}
-
-// ===== Hack Data Replacement =====
-// isExistInHackDictionary for capture tracking
-static void onAddHack(GameDataHolderWriter writer, const char* hackName) {
-    GameModeManager* manager = GameModeManager::instance();
-    if (manager->isModeAndActive(GameMode::ARCHIPELAGO) && manager->getMode<ArchipelagoMode>()->getCapturesFlag()) {
-        // Client::setMessage(2, hackName);
-        manager->getMode<ArchipelagoMode>()->sendCaptureCheck(hackName);
-        manager->getMode<ArchipelagoMode>()->setIsRecordCapture(true);
-    } else {
-        GameDataFunction::addHackDictionary(writer, hackName);
-    }
-}
-
-static void canEndHack(al::LiveActor* actor) {
-    if (actor != nullptr) {
-        ((PlayerHackKeeper*)actor)->endHackStartDemo(actor);
-    }
-}
-
-// ===== Shine List / Collections List =====
-static void setShineCounterAndDenominatorHook(al::LayoutActor* shineList, int numerator, int denominator) {
-    if (GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-        numerator = GameModeManager::instance()->getMode<ArchipelagoMode>()->getNumGotShines();
-        // setShineCounterAndDenominatorHook.orig();
-        rs::setCounterAndDenominator(shineList, numerator, denominator);
-
-    } else {
-        // setShineCounterAndDenominatorHook.orig();
-        rs::setCounterAndDenominator(shineList, numerator, denominator);
-    }
-}
-
-static int getWorldIdForShineListHook(GameProgressData* gameProgressData, int worldId) {
-    if (GameModeManager::instance() && GameModeManager::instance()->isMode(GameMode::ARCHIPELAGO)) {
-        int shineListWorldId = gameProgressData->getWorldIdForShineList(worldId);
-        GameModeManager::instance()->getMode<ArchipelagoMode>()->setCurWorldShineList(shineListWorldId);
-        return shineListWorldId;
-
-    } else {
-        return gameProgressData->getWorldIdForShineList(worldId);
-    }
-}
-
 // ===== QOL Changes =====
 bool growOnPlant(GrowFlowerPot* thisPtr) {
     if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO))
@@ -526,13 +163,6 @@ bool skipHackCutscene(DemoStateHackFirst* thisPtr, IUsePlayerHack** param_1, con
         return false;
 
     return thisPtr->tryHackFirst(param_1, param_2, param_3, param_4);
-}
-
-int calcWorldNumForShineListHook(GameProgressData* gpd) {
-    if (GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        return 17;
-    }
-    return gpd->calcWorldNumForShineList();
 }
 
 static void updateListHook(GameProgressData* gameProgressData) {
@@ -799,50 +429,218 @@ static HkTrampoline<bool, GameDataFile*, int, int> tryUnlockShineNameHook = hk::
     return tryUnlockShineNameHook.orig(self, worldId, index);
 });
 
-// ----- Cappy Messenger: text-system intercept -----
-//
-// Four trampolines on al's per-mstxt-file message accessors. When
-// CapMessageLayout::exeDelay (called from rs::tryShowCapMessagePriorityLow
-// downstream) asks for ArchipelagoMode::kArchipelagoCappyLabel and a Cappy
-// buffer is currently live, return our UTF-16 buffer and synthesize the
-// "label exists" probe. All four are hooked because exeDelay dispatches
-// through either the System or Stage variant based on
-// CapMessageShowInfo::isStageMessage; rs::tryShowCapMessagePriorityLow uses
-// the System path but defensive hooking of both costs little and protects
-// against future code that uses the Stage path.
+void InstallArchipelagoHooks() {
+    hk::hook::writeBranchLinkAtMainOffset(0x512AE8, onNewGameDemoStart);  // Intro demo start
+    hk::hook::writeBranchLinkAtMainOffset(0x50FED4, onUnlockLost);        // Beat Bowser in Cloud Check
+    hk::hook::writeBranchLinkAtMainOffset(0x4C54A4, onCreditsStart);      // Beat the Game Check
+    hk::hook::writeBranchLinkAtMainOffset(0x209844, isBuyItemHook);       // Shop bought items old  0x54C3A0
+    hk::hook::writeBranchLinkAtMainOffset(0x38C408, skipHackCutscene);    // Skip frog cutscene
+    hk::hook::writeBranchAtMainOffset(0x56CC70, canEndHack);              // Fix uncapture crash
 
-static bool isExistCappyLabelInSystemMessageHook(const al::IUseMessageSystem* sys, const char* mstxt, const char* label) {
-    if (GameModeManager::instance() && GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        if (GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label) != nullptr) {
-            return true;
-        }
-    }
-    return al::isExistLabelInSystemMessage(sys, mstxt, label);
-}
+    hk::hook::writeBranchLinkAtMainOffset(0x4496AC, onAddHack);           // Capturesanity checks
+    hk::hook::writeBranchLinkAtMainOffset(0x2089C4, getShopItemMessage);  // Shop Text Replacement
+    hk::hook::writeBranchLinkAtMainOffset(0x208A44, getShopItemMessage);  // Shop Text Replacement
+    // hk::hook::a64::assemble<"MOV W8, W28">().installAtMainOffset(0x534C58);  // Lock painting order
+    // hk::hook::a64::assemble<"MOV W8, W26">().installAtMainOffset(0x534C70);  // as if lake and snow
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534C80);  // are always branch
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534C9C);  // selections
 
-static const char16_t* getSystemMessageCappyStringHook(const al::IUseMessageSystem* sys, const char* mstxt, const char* label) {
-    if (GameModeManager::instance() && GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label);
-        if (sub)
-            return sub;
-    }
-    return al::getSystemMessageString(sys, mstxt, label);
-}
+    // Eventually replace this with updateListHook
+    // UpdateListHook could also be used for world order rando and painting order rando
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x534858);  // Lock painting order
+    // hk::hook::a64::assemble<"MOV W8, 0x1">().installAtMainOffset(0x534870);  // as if lake and snow
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x534B0C);  // are always branch
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x534b24);  // selections
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x5349E0);  // Always unlock whole moon list
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x5349F8);
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x534C50);
+    // hk::hook::a64::assemble<"MOV W8, 0x2">().installAtMainOffset(0x534C68);
 
-static bool isExistCappyLabelInStageMessageHook(const al::IUseMessageSystem* sys, const char* mstxt, const char* label) {
-    if (GameModeManager::instance() && GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        if (GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label) != nullptr) {
-            return true;
-        }
-    }
-    return al::isExistLabelInStageMessage(sys, mstxt, label);
-}
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534888);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x5348b0);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534b3c);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534b5c);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534a10);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534a38);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534c80);
+    // hk::hook::a64::assemble<"MOV W8, 0x4">().installAtMainOffset(0x534c9c);
 
-static const char16_t* getStageMessageCappyStringHook(const al::IUseMessageSystem* sys, const char* mstxt, const char* label) {
-    if (GameModeManager::instance() && GameModeManager::instance()->isModeAndActive(GameMode::ARCHIPELAGO)) {
-        const char16_t* sub = GameModeManager::instance()->getMode<ArchipelagoMode>()->lookupCappyMessageSubstitution(label);
-        if (sub)
-            return sub;
-    }
-    return al::getStageMessageString(sys, mstxt, label);
+    hk::hook::writeBranchLinkAtMainOffset(0x52B154, calcWorldNumForShineListHook);  // Always unlock whole moon list
+    // getWorldIdForShineListHook.installAtSym<"_ZNK16GameProgressData22getWorldIdForShineListEi">();  // shine list // Also Crashes
+    hk::hook::writeBranchLinkAtMainOffset(0x52b118, getWorldIdForShineListHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x5355c8, updateListHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x5354d4, updateListHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x535230, updateListHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x535168, updateListHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x502ef4, exeDemoWorldSelectTalkMessageHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x30e1a8, addPayShineHook);
+
+    // hk::hook::writeBranchLinkAtMainOffset(0x534740, updateListHook); // Causes Crash on boot
+
+    // Don't auto equip cutscene awarded outfits
+    // Transition to Branch Link to prevent interfering with base game when AP disabled
+    hk::hook::writeBranchLinkAtMainOffset(0x4DD16C, wearCapHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DD0AC, wearCostumeHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DD0E8, wearCapHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x310FE4, wearCapHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x311440, wearCostumeHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x311464, wearCapHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x319EE4, wearCostumeHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x3190F4, wearCapHook);
+
+    // Moon Data Replacement
+    // Text Label
+    hk::hook::writeBranchLinkAtMainOffset(0x4DC504, isReplaceShineLabel);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DE63C, isReplaceShineLabel);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DD680, isReplaceShineLabel);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DC52C, setShineLabel);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DE664, setShineLabel);
+    hk::hook::writeBranchLinkAtMainOffset(0x4DD6A8, setShineLabel);
+
+    // Color
+    hk::hook::writeBranchLinkAtMainOffset(0x1CDCE4, setShineColor);
+    hk::hook::writeBranchLinkAtMainOffset(0x1CDDCC, setShineColor);
+    hk::hook::a64::assemble<"MOV X0, X19">().installAtMainOffset(0x1CDD2C);
+    hk::hook::a64::assemble<"MOV X0, X19">().installAtMainOffset(0x1CDE14);
+    hk::hook::writeBranchLinkAtMainOffset(0x1CDD3C, setShineModelColor);
+    hk::hook::writeBranchLinkAtMainOffset(0x1CDE24, setShineModelColor);
+    hk::hook::writeBranchLinkAtMainOffset(0x1CD94C, isPowerStarHook);   // Make Moons into Stars
+    hk::hook::writeBranchLinkAtMainOffset(0x1CDB94, isWorldPeachHook);  // Overwrite default Star behavior
+
+    hk::hook::writeBranchLinkAtMainOffset(0x1D2F08, onGrandShineStageChange);  // Fixes multi moon soft lock exccept going to Odysseyless Cap
+    hk::hook::writeBranchLinkAtMainOffset(0x52F71C, changeNextStage);          // Scenario Tracking
+    hk::hook::writeBranchLinkAtMainOffset(0x51DA40, changeNextStage);          // Scenario updating via Odyssey
+    // hk::hook::writeBranchLinkAtMainOffset(0x51d20c, tryFindLinkDestStageInfoOverride);  // ER Stuff
+
+    // Always active Odyssey
+    // isUnlockedWorldHook.installAtSym<"_ZN16GameDataFunction15isUnlockedWorldE22GameDataHolderAccessori">();
+    // isExistHomeHook.installAtSym<"_ZN16GameDataFunction11isExistHomeE22GameDataHolderAccessor">();
+    // hk::hook::trampoline([]() -> bool { return true; }).installAtSym<"_ZN16GameDataFunction11isExistHomeE22GameDataHolderAccessor">();
+    hk::hook::writeBranchLinkAtMainOffset(0x309904, isUnlockWorldForHomeHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x30991c, isUnlockWorldForHomeHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x1f365c, isExistHomeHook);
+
+    // Grab Shine replace
+    isGrabShineByShineInfoHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessorPK9ShineInfo">();
+    isGrabShineByHintInfoIdxHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessori">();
+    // isGrabShineByWorldIdHintIdxHook.installAtSym<"_ZN16GameDataFunction10isGotShineE22GameDataHolderAccessorii">();
+    hk::hook::writeBranchLinkAtMainOffset(0x206E00, shineListShineCountHook);  // Shine List
+    // setShineCounterAndDenominatorHook.installAtSym<"_ZN2rs24setCounterAndDenominatorEPN2al11LayoutActorEii">();
+    hk::hook::writeBranchLinkAtMainOffset(0x2045d0, setShineCounterAndDenominatorHook);  // Shine List
+
+    getUnlockShineNumHook.installAtSym<"_ZNK14GameDataHolder18findUnlockShineNumEPbi">();  // Change unlock requirements
+
+    // Item Checks
+    hk::hook::writeBranchLinkAtMainOffset(0x54CB9C, buyItemHook);  // Caps
+    hk::hook::writeBranchLinkAtMainOffset(0x54C604, buyItemHook);  // Clothes
+    hk::hook::writeBranchLinkAtMainOffset(0x54C3EC, buyItemHook);  // Non typical Buy
+    hk::hook::writeBranchLinkAtMainOffset(0x54C324, buyItemHook);  // Buy in shop
+    // Move below to branch Link to enforce game mode requirement
+    hk::hook::writeBranchLinkAtMainOffset(0x318BF8, useCoinCollectHook);  // Don't subtract regional coins
+
+    //.installAtSym<"">();
+    //.installAtSym<"_ZNK12GameDataFile30findUnlockShineNumCurrentWorldEPb">();
+
+    // Grab Regional Coin Replace
+    hk::hook::writeBranchLinkAtMainOffset(0x529B38, isGotCoinCollectHook);
+    // Fix Regional Counter and Use in Shops
+    hk::hook::writeBranchLinkAtMainOffset(0x5787D0, getCurrentWorldIdForCoinCollectHook);                       // Picture Font
+    hk::hook::writeBranchLinkAtMainOffset(0x556588, getCurrentWorldIdForCoinCollectHook);                       // CoinCollectArchiveName
+    hk::hook::writeBranchLinkAtMainOffset(0x5565E4, getCurrentWorldIdForCoinCollectHook);                       // CoinCollectEmptyArchiveName
+    hk::hook::writeBranchLinkAtMainOffset(0x556640, getCurrentWorldIdForCoinCollectHook);                       // CoinCollect2DArchiveName
+    hk::hook::writeBranchLinkAtMainOffset(0x55669C, getCurrentWorldIdForCoinCollectHook);                       // CoinCollect2DEmptyArchiveName
+    getCoinCollectNumHook.installAtSym<"_ZN16GameDataFunction17getCoinCollectNumE22GameDataHolderAccessor">();  // Gets coin collect num
+                                                                                                                // using world id relative
+                                                                                                                // to ER
+
+    hk::hook::writeBranchLinkAtMainOffset(0x1C2bCC, getCoinCollectCheckGotNumHook);  // Gets num of regional coin checks
+                                                                                     // gotten for pop up on collect
+    hk::hook::writeBranchLinkAtMainOffset(0x1C2BE4, getCoinCollectNumMaxHook);       // Gets total regional coin count
+                                                                                     // for pop up on collect based on relative world
+
+    // Instant Plant Growth QoL
+    hk::hook::writeBranchLinkAtMainOffset(0x28f6d8, growOnPlant);
+
+    // isGotCoinCollectHook.installAtSym<"_ZNK12GameDataFile16isGotCoinCollectEPKN2al11PlacementIdE">();
+    // hk::hook::a64::assemble<"NOP">().installAtMainOffset(0x313334);
+
+    // // ===== Talkatoo% mode hooks =====
+    // // Three trampolines + one data-symbol lookup. All inert when
+    // // ArchipelagoMode::getTalkatooMode() is false (toggled by the server
+    // // side via setTalkatooMode). Symbols catalogued in syms/main.sym.
+
+    // // Resolve Poetter's vtable address so the substitute hook can scope to
+    // // Talkatoo callers only. A failure here leaves the trampoline installed
+    // // but inert (substitute returns vanilla for every caller because
+    // // actorIsPoetter returns false) — graceful degradation on a hypothetical
+    // // future SMO patch that renames the class.
+    // {
+    //     const ptr vt = hk::ro::lookupSymbol("_ZTV7Poetter");
+    //     if (vt == 0) {
+    //         Logger::log("[talkatoo] lookupSymbol _ZTV7Poetter FAILED — substitute hook inert\n");
+    //     } else {
+    //         TalkatooHook::g_poetterVtableAddr = static_cast<uintptr_t>(vt);
+    //         Logger::log("[talkatoo] Poetter vtable @ 0x%lx\n", static_cast<unsigned long>(vt));
+    //     }
+    // }
+    // tryFindShineMessageHook.installAtSym<"_ZN16GameDataFunction19tryFindShineMessageEPKN2al9LiveActorEPKNS0_17IUseMessageSystemEii">();
+    // isOpenShineNameHook.installAtSym<"_ZNK12GameDataFile15isOpenShineNameEii">();
+    // tryUnlockShineNameHook.installAtSym<"_ZN12GameDataFile18tryUnlockShineNameEii">();
+
+    // // ===== Cappy Messenger hooks =====
+    // // Four trampolines on the per-mstxt message accessors (one System hook
+    // // and one Stage hook for each of isExistLabel + getString). The hooks
+    // // synthesize the kArchipelagoCappyLabel lookup against ArchipelagoMode's
+    // // currently-live UTF-16 buffer. Inert unless enqueueCappyMessage has
+    // // pushed at least one entry AND setCappyRsCalls below succeeded.
+    // //
+    // // CAVEAT: the existing shop-text BL replacements at 0x2089C4 / 0x208A44
+    // // route through getShopItemMessage (which falls back to
+    // // al::getSystemMessageString). The function-level trampoline below
+    // // intercepts the fallback too — which is fine because non-Cappy labels
+    // // pass through to Orig unchanged.
+    // isExistLabelInSystemMessageHook.installAtSym<"_ZN2al27isExistLabelInSystemMessageEPKNS_17IUseMessageSystemEPKcS4_">();
+    // getSystemMessageStringTrampolineHook.installAtSym<"_ZN2al22getSystemMessageStringEPKNS_17IUseMessageSystemEPKcS4_">();
+    // isExistLabelInStageMessageHook.installAtSym<"_ZN2al26isExistLabelInStageMessageEPKNS_17IUseMessageSystemEPKcS4_">();
+    // getStageMessageStringHook.installAtSym<"_ZN2al21getStageMessageStringEPKNS_17IUseMessageSystemEPKcS4_">();
+    // hk::hook::writeBranchLinkAtMainOffset(0x3302F8, isExistCappyLabelInSystemMessageHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x3303E4, getSystemMessageCappyStringHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x330494, getStageMessageCappyStringHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x33049c, getSystemMessageCappyStringHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x330174, getSystemMessageCappyStringHook);
+    // hk::hook::writeBranchLinkAtMainOffset(0x93a290, getMessageHolderHook);
+
+    hk::hook::writeBranchLinkAtMainOffset(0x1dcb8c, isExistCappyLabelInSystemMessageHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x1dcbc4, getSystemMessageCappyStringHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x1dcb4c, isExistCappyLabelInStageMessageHook);
+    hk::hook::writeBranchLinkAtMainOffset(0x1dcb84, getStageMessageCappyStringHook);
+
+    // Force oder of world unlock selections
+    // calcNextLockedLayoutHook.installAtSym<
+    //     "_ZN16GameDataFunction32calcNextLockedWorldIdForWorldMapEPKN2al11LayoutActorEi">();
+    // calcNextLockedSceneHook.installAtSym<
+    //     "_ZN16GameDataFunction32calcNextLockedWorldIdForWorldMapEPKN2al5SceneEi">();
+
+    // rs:: function-pointer wiring. tryPumpCappyMessage's dispatch path
+    // skips when either pointer is null, so a lookup failure here leaves
+    // the queue accumulating but never firing — visible as enqueueCappyMessage
+    // logs without corresponding bubble dispatches.
+    // {
+    //     const ptr tryShow = hk::ro::lookupSymbol("_ZN2rs28tryShowCapMessagePriorityLowEPKN2al18IUseSceneObjHolderEPKcii");
+    //     const ptr isActive = hk::ro::lookupSymbol("_ZN2rs18isActiveCapMessageEPKN2al18IUseSceneObjHolderE");
+    //     if (tryShow == 0 || isActive == 0) {
+    //         Logger::log("[cappy] lookupSymbol failed tryShow=0x%lx isActive=0x%lx — pump disabled\n", static_cast<unsigned long>(tryShow),
+    //                     static_cast<unsigned long>(isActive));
+    //     } else {
+    //         Logger::log("[cappy] tryShow @ 0x%lx isActive @ 0x%lx\n", static_cast<unsigned long>(tryShow), static_cast<unsigned long>(isActive));
+    //         // setCappyRsCalls is static — safe to call at install time
+    //         // before any ArchipelagoMode instance is created. The function
+    //         // pointers live in class-static storage and are read by
+    //         // tryPumpCappyMessage on every frame.
+    //         ArchipelagoMode::setCappyRsCalls(reinterpret_cast<ArchipelagoMode::TryShowCapMessagePriorityLowFn>(tryShow),
+    //                                          reinterpret_cast<ArchipelagoMode::IsActiveCapMessageFn>(isActive));
+    //     }
+    // }
+
+    InstallAbilityLockHooks();
 }

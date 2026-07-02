@@ -13,7 +13,8 @@ enum ArchipelagoConfigParts {
     OptionSlotName = 5,
     OptionPassowrd = 6,
     OptionDeathlink = 7,
-    OptionDefaultMode = 8,
+    OptionMotionButton = 8,
+    OptionDefaultMode = 9,
 };
 
 // Forward declaration
@@ -27,12 +28,12 @@ public:
     const sead::WFixedSafeString<0x200>* getStringData() override;
     GameModeConfigMenu::UpdateAction updateMenu(int selectIndex) override;
 
-    const int getMenuSize() override { return 8; }  // Fixed size for now
+    const int getMenuSize() override { return 9; }  // Fixed size for now
 
     void initMenu() override;
 
 private:
-    static constexpr int mItemCount = 8;
+    static constexpr int mItemCount = 9;
     sead::SafeArray<sead::WFixedSafeString<0x200>, mItemCount> mItems;
     Keyboard* mIPKeyboard = nullptr;
     Keyboard* mHostNameKeyboard = nullptr;

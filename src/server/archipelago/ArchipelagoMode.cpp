@@ -1127,6 +1127,40 @@ bool ArchipelagoMode::hasRegionalCoin(int index) {
     return false;
 }
 
+void ArchipelagoMode::unlockAbility(int index) {
+    u8 unlockedAbilitiesEntry = mUnlockedAbilities[index / 8];
+
+    int curIndex = (index / 8) * 8;
+    int i = 1;
+    while (i < 0x100) {
+        if (curIndex == index) {
+            unlockedAbilitiesEntry = unlockedAbilitiesEntry | i;
+            break;
+        }
+        i = i << 1;
+        curIndex += 1;
+    }
+
+    mUnlockedAbilities[index / 8] = unlockedAbilitiesEntry;
+}
+
+bool ArchipelagoMode::isAbilityUnlocked(int index) {
+    if (!mIsAbilityLockEnabled)
+        return true;
+    u8 unlockedAbilitiesEntry = mUnlockedAbilities[index / 8];
+    int curIndex = (index / 8) * 8;
+    int i = 1;
+    while (i < 0x100) {
+        if (curIndex == index) {
+            unlockedAbilitiesEntry = unlockedAbilitiesEntry & i;
+            return (unlockedAbilitiesEntry == i);
+        }
+        i = i << 1;
+        curIndex += 1;
+    }
+    return false;
+}
+
 void ArchipelagoMode::enqueueCappyMessage(cappyMessage message) {
     if (message.itemType > CappyMessageTypes::CappyRegionalCoin && message.itemType < CappyMessageTypes::CappyMoonRock) {
         message.itemIndex = mCurrentCappyQueue + 148;
@@ -1339,9 +1373,9 @@ int ArchipelagoMode::getShineColor(Shine* curShine) {
     }
 
     if (color > -1) {
-        if (color - 64 > -1) {
-            return color - 64;
-        }
+        // if (color - 64 > -1) {
+        //     return color - 64;
+        // }
         return color;
     }
 
@@ -1480,6 +1514,7 @@ void ArchipelagoMode::clearCollectibles() {
     mScoutedSouvenirs.fill(0);
     mScoutedShopMoons.fill(0);
     mScoutedMoonRocks.fill(0);
+    mUnlockedAbilities.fill(0);
 }
 
 void ArchipelagoMode::clearScenarios() {
@@ -1684,6 +1719,46 @@ void ArchipelagoMode::debugMenuControls() {
     // } → ← ↓ ↑
 }
 
+void ArchipelagoMode::drawAbilityLockWindow() {
+    // ImGui::SetNextWindowSize(ImVec2(340, 560), ImGuiCond_Once);
+    // ImGui::SetNextWindowPos(ImVec2(780, 20), ImGuiCond_Once);
+    // ImGui::SetNextWindowCollapsed(true, ImGuiCond_Appearing);
+    // ImGui::Begin("Ability Lock");
+
+    // GameDataHolderAccessor accessor = accessorForLastPlayer();
+    // GameDataHolderWriter writer(sLastGameData);
+
+    // const ArchipelagoMode::AbilityEntry* startCap = ArchipelagoMode::getStartingCapThrow();
+    // ImGui::Text("Starting cap throw: %s", startCap ? startCap->displayName : "None");
+    // ImGui::Separator();
+
+    for (s32 i = 0; i < AbilityId::AbilityId_End; i++) {
+        const char* ability = abilities[i];
+        if (!ability)
+            continue;
+
+        bool unlocked = isAbilityUnlocked(i);
+        const bool changed = ImGui::Checkbox(ability, &unlocked);
+
+        // if (isStartingCap) {
+        //     ImGui::SameLine();
+        //     ImGui::TextDisabled("(Start)");
+        // }
+
+        // if (changed && sLastGameData) {
+        //     ArchipelagoMode::setAbilityDebugUnlocked(*ability, unlocked);
+        //     ArchipelagoMode::setAbilityUnlocked(writer, *ability, unlocked);
+        // }
+    }
+
+    // ImGui::Separator();
+    // if (ImGui::Button("Unlock All") && sLastGameData)
+    //     ArchipelagoMode::unlockAll(writer);
+    // ImGui::SameLine();
+    // if (ImGui::Button("Lock All") && sLastGameData)
+    //     ArchipelagoMode::clearAll(writer);
+}
+
 // Returns if menu was drawn
 bool ArchipelagoMode::infoMenu() {
     if (!mIsInfoMenuOpen)
@@ -1719,6 +1794,7 @@ bool ArchipelagoMode::infoMenu() {
         break;
 
     case 2:
+        drawAbilityLockWindow();
         break;
 
     case 3:
